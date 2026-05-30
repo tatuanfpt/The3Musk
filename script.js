@@ -39,6 +39,17 @@ const memberList = document.getElementById("member-list");
 const darkModeBtn = document.getElementById("dark-mode-btn");
 const exportBtn = document.getElementById("export-btn");
 const importFile = document.getElementById("import-file");
+// One Thing DOM Elements
+const oneThingBtn = document.getElementById("one-thing-btn");
+const oneThingPanel = document.getElementById("one-thing-panel");
+const closeOneThingBtn = document.getElementById("close-one-thing-btn");
+const oneThingForm = document.getElementById("one-thing-form");
+const oneThingInput = document.getElementById("one-thing-input");
+const oneThingMessages = document.getElementById("one-thing-messages");
+const focusModeBtn = document.getElementById("focus-mode-btn");
+const focusModeOverlay = document.getElementById("focus-mode-overlay");
+const closeFocusModeBtn = document.getElementById("close-focus-mode-btn");
+const focusModeTask = document.getElementById("focus-mode-task");
 
 // Initialize
 function init() {
@@ -372,11 +383,211 @@ function setupEventListeners() {
   exportBtn.onclick = exportData;
   importFile.onchange = importData;
 
+  // One Thing
+  oneThingBtn.onclick = toggleOneThingPanel;
+  closeOneThingBtn.onclick = toggleOneThingPanel;
+  oneThingForm.onsubmit = handleOneThingSubmit;
+  focusModeBtn.onclick = openFocusMode;
+  closeFocusModeBtn.onclick = closeFocusMode;
+
   // Close modals on outside click
   window.onclick = (e) => {
     if (e.target === taskModal) closeTaskModal();
     if (e.target === memberModal) closeMemberModal();
+    if (e.target === oneThingPanel) toggleOneThingPanel();
+    if (e.target === focusModeOverlay) closeFocusMode();
   };
+}
+
+// ----------------------
+// One Thing Functions
+// ----------------------
+
+function toggleOneThingPanel() {
+  oneThingPanel.classList.toggle("hidden");
+  if (
+    !oneThingPanel.classList.contains("hidden") &&
+    oneThingMessages.children.length === 0
+  ) {
+    renderWelcomeMessage();
+  }
+}
+
+function renderWelcomeMessage() {
+  const message = {
+    type: "bot",
+    text: `Xin chào! Tôi là One Thing Assistant! Hãy hỏi tôi:
+- "hôm nay làm gì?" để xem task ưu tiên nhất
+- "task của tôi?" để xem tất cả task của bạn
+- "team ra sao?" để xem tổng quan team`,
+  };
+  addOneThingMessage(message);
+}
+
+function addOneThingMessage(message) {
+  const messageEl = document.createElement("div");
+  messageEl.className = `flex gap-3 ${message.type === "user" ? "justify-end" : "justify-start"}`;
+  messageEl.innerHTML = `
+    <div class="max-w-[80%] p-3 rounded-2xl ${
+      message.type === "user"
+        ? "bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-br-sm"
+        : "bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white rounded-bl-sm"
+    }">
+      <p class="text-sm whitespace-pre-wrap">${message.text}</p>
+    </div>
+  `;
+  oneThingMessages.appendChild(messageEl);
+  oneThingMessages.scrollTop = oneThingMessages.scrollHeight;
+}
+
+function handleOneThingSubmit(e) {
+  e.preventDefault();
+  const query = oneThingInput.value.trim();
+  if (!query) return;
+
+  // Add user message
+  addOneThingMessage({ type: "user", text: query });
+  oneThingInput.value = "";
+
+  // Process query
+  setTimeout(() => {
+    const response = processOneThingQuery(query);
+    addOneThingMessage({ type: "bot", text: response });
+  }, 300);
+}
+
+function getCurrentUserTasks() {
+  return state.tasks.filter(
+    (t) => t.assigneeId == state.currentUser && t.status !== "done",
+  );
+}
+
+function getOneThingPriority() {
+  const userTasks = getCurrentUserTasks();
+  if (userTasks.length === 0) return null;
+
+  // Sort by deadline (earliest first), then by status (progress > review > todo)
+  const statusOrder = { progress: 0, review: 1, todo: 2 };
+  return userTasks.sort((a, b) => {
+    // First compare deadlines
+    if (a.deadline && b.deadline) {
+      return new Date(a.deadline) - new Date(b.deadline);
+    }
+    if (a.deadline) return -1;
+    if (b.deadline) return 1;
+
+    // Then compare status
+    return statusOrder[a.status] - statusOrder[b.status];
+  })[0];
+}
+
+function processOneThingQuery(query) {
+  const lowerQuery = query.toLowerCase();
+
+  if (
+    lowerQuery.includes("hôm nay") ||
+    lowerQuery.includes("today") ||
+    lowerQuery.includes("one thing")
+  ) {
+    const oneThing = getOneThingPriority();
+    if (!oneThing) {
+      return "Chúc mừng! Bạn không còn task nào chưa hoàn thành! 🎉";
+    }
+    const assignee = state.members.find((m) => m.id == oneThing.assigneeId);
+    return `✨ **One Thing Today** ✨
+
+**${oneThing.title}**
+${oneThing.description ? `- ${oneThing.description}` : ""}
+- Người thực hiện: ${assignee?.name || "Unassigned"}
+${oneThing.deadline ? `- Hạn nộp: ${formatDate(oneThing.deadline)}` : ""}
+- Trạng thái: ${getStatusText(oneThing.status)}`;
+  }
+
+  if (lowerQuery.includes("task của tôi") || lowerQuery.includes("my tasks")) {
+    const myTasks = getCurrentUserTasks();
+    if (myTasks.length === 0) {
+      return "Bạn không có task nào! 🎉";
+    }
+    return `📋 **Your Tasks** (${myTasks.length})
+
+${myTasks
+  .map(
+    (task, idx) =>
+      `${idx + 1}. ${task.title} [${getStatusText(task.status)}]${
+        task.deadline ? ` - ${formatDate(task.deadline)}` : ""
+      }`,
+  )
+  .join("\n")}`;
+  }
+
+  if (lowerQuery.includes("team") || lowerQuery.includes("team ra sao")) {
+    const statusCounts = { todo: 0, progress: 0, review: 0, done: 0 };
+    state.tasks.forEach((t) => statusCounts[t.status]++);
+
+    return `👥 **Team Overview**
+
+- Tổng tasks: ${state.tasks.length}
+- Cần làm: ${statusCounts.todo}
+- Đang làm: ${statusCounts.progress}
+- Đang review: ${statusCounts.review}
+- Hoàn thành: ${statusCounts.done}
+
+Thành viên:
+${state.members.map((m) => `- ${m.name}`).join("\n")}`;
+  }
+
+  return "Xin lỗi, tôi không hiểu câu hỏi! Hãy thử hỏi: 'hôm nay làm gì?' hoặc 'task của tôi?'";
+}
+
+function openFocusMode() {
+  const oneThing = getOneThingPriority();
+  if (!oneThing) {
+    alert("Bạn không có task nào để focus!");
+    return;
+  }
+
+  const assignee = state.members.find((m) => m.id == oneThing.assigneeId);
+  const isOverdue =
+    oneThing.deadline &&
+    new Date(oneThing.deadline) < new Date() &&
+    oneThing.status !== "done";
+
+  focusModeTask.innerHTML = `
+    <div class="bg-gradient-to-r from-indigo-500/10 to-purple-500/10 p-6 rounded-xl border border-indigo-200 dark:border-indigo-800">
+      <div class="flex justify-between items-start mb-4">
+        <span class="text-xs font-bold px-2 py-0.5 rounded uppercase tracking-wider ${getStatusColor(oneThing.status)}">
+          ${getStatusText(oneThing.status)}
+        </span>
+      </div>
+      <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-3">${oneThing.title}</h3>
+      ${
+        oneThing.description
+          ? `<p class="text-gray-600 dark:text-gray-300 mb-4">${oneThing.description}</p>`
+          : ""
+      }
+      <div class="flex items-center gap-2 mb-4">
+        <div class="w-8 h-8 rounded-full ${assignee?.color || "bg-gray-400"} text-white flex items-center justify-center text-xs font-bold">
+          ${assignee?.avatar || "?"}
+        </div>
+        <span class="text-sm text-gray-600 dark:text-gray-300 font-medium">${assignee?.name || "Unassigned"}</span>
+      </div>
+      ${
+        oneThing.deadline
+          ? `
+        <div class="flex items-center gap-2 text-sm ${isOverdue ? "text-red-500 font-medium" : "text-gray-600 dark:text-gray-300"}">
+          <i class="lucide-calendar"></i>
+          ${formatDate(oneThing.deadline)}
+        </div>
+      `
+          : ""
+      }
+    </div>
+  `;
+  focusModeOverlay.classList.remove("hidden");
+}
+
+function closeFocusMode() {
+  focusModeOverlay.classList.add("hidden");
 }
 
 function openTaskModal(task = null) {
