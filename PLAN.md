@@ -33,6 +33,8 @@
 | **Thực hiện** | Build UI Layout | Tạo khung Dashboard và 3 cột Kanban | UI Components | Dev | M | Init |
 | **Thực hiện** | Logic Quản lý Task | Implement CRUD task với LocalStorage | Task Service | Dev | M | Layout |
 | **Thực hiện** | Member Management | UI/Logic quản lý 3 thành viên | Member Module | Dev | S | Init |
+| **Thực hiện** | AI Knowledge Manager | Hệ thống Q&A dựa trên context | AI Chat Bot | Dev | L | Task Logic |
+| **Thực hiện** | AI Writer Tools | Tích hợp Rewrite/Summarize vào Task | AI Features | Dev | M | Task Logic |
 | **Kiểm tra** | Unit Test Logic | Kiểm tra các quy tắc nghiệp vụ (BR) | Test Report | QA/Dev | S | Logic |
 | **Bàn giao** | Push to GitHub | Đẩy code và tài liệu lên repo | GitHub Repo | Dev | S | All |
 

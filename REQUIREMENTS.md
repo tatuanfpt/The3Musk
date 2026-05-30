@@ -23,6 +23,9 @@ Dự án **3Musk** được xây dựng nhằm tối ưu hóa hiệu suất làm
 | FR-03 | Phân quyền Task | Gán người chịu trách nhiệm và deadline cho từng task. | High |
 | FR-04 | Thông báo | Cập nhật khi có thay đổi trạng thái task hoặc comment mới. | Medium |
 | FR-05 | Báo cáo hiệu suất | Biểu đồ tròn hiển thị tỉ lệ hoàn thành công việc của nhóm. | Low |
+| FR-06 | AI Writer | Hỗ trợ soạn thảo, sửa ngữ pháp, thay đổi giọng văn, tóm tắt nội dung task/docs. | High |
+| FR-07 | AI Knowledge | Hỏi đáp dựa trên ngữ cảnh toàn bộ workspace (tasks, comments, docs). | High |
+| FR-08 | Task Docs & Comments | Cho phép thêm ghi chú chi tiết và thảo luận trong từng task. | High |
 
 ### 3.2. Non-functional Requirements (Yêu cầu phi chức năng)
 - **Hiệu năng:** Tải trang đầu tiên dưới 1.5 giây.

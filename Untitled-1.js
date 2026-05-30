@@ -15,12 +15,6 @@ const addTaskBtn = document.getElementById('add-task-btn');
 const closeModalBtn = document.getElementById('close-modal');
 const memberBadges = document.getElementById('member-badges');
 const taskAssigneeSelect = document.getElementById('task-assignee');
-const aiPanel = document.getElementById('ai-panel');
-const aiAssistantBtn = document.getElementById('ai-assistant-btn');
-const closeAiPanelBtn = document.getElementById('close-ai-panel');
-const aiInput = document.getElementById('ai-input');
-const sendAiBtn = document.getElementById('send-ai-query');
-const aiChatHistory = document.getElementById('ai-chat-history');
 
 // Initialize
 function init() {
@@ -141,89 +135,6 @@ function setupEventListeners() {
     window.onclick = (e) => {
         if (e.target == taskModal) taskModal.classList.add('hidden');
     };
-
-    // AI Panel Events
-    aiAssistantBtn.onclick = () => aiPanel.classList.remove('translate-x-full');
-    closeAiPanelBtn.onclick = () => aiPanel.classList.add('translate-x-full');
-    
-    sendAiBtn.onclick = () => handleAiChat();
-    aiInput.onkeypress = (e) => {
-        if (e.key === 'Enter') handleAiChat();
-    };
-}
-
-// AI Actions (Writer)
-window.aiAction = async (type) => {
-    const titleInput = document.getElementById('task-title');
-    const descInput = document.getElementById('task-desc');
-    
-    let content = type === 'optimize-title' ? titleInput.value : descInput.value;
-    if (!content) return alert('Vui lòng nhập nội dung trước khi dùng AI!');
-
-    // UI Loading state
-    const originalText = content;
-    if (type === 'optimize-title') titleInput.value = 'AI đang xử lý...';
-    else descInput.value = 'AI đang xử lý nội dung...';
-
-    // Giả lập gọi API AI (Mocking AI response)
-    setTimeout(() => {
-        let result = '';
-        switch(type) {
-            case 'optimize-title':
-                result = `[Dự án 3Musk] ${content.charAt(0).toUpperCase() + content.slice(1)}`;
-                titleInput.value = result;
-                break;
-            case 'fix-grammar':
-                result = content.replace(/SOP/g, 'Standard Operating Procedure').replace(/brief/g, 'Bản tóm tắt yêu cầu');
-                descInput.value = result;
-                break;
-            case 'summarize':
-                result = `Tóm tắt: ${content.substring(0, 50)}... (Đã rút gọn nội dung chính)`;
-                descInput.value = result;
-                break;
-            case 'rewrite-professional':
-                result = `Kính gửi team,\n\nTôi muốn cập nhật về task: ${content}.\n\nTrân trọng,\nMusketeer Bot`;
-                descInput.value = result;
-                break;
-        }
-    }, 1000);
-};
-
-// AI Knowledge Manager (Chat)
-function handleAiChat() {
-    const query = aiInput.value.trim();
-    if (!query) return;
-
-    // Add user message
-    appendChatMessage('user', query);
-    aiInput.value = '';
-
-    // Mock AI Reasoning based on Workspace Context
-    setTimeout(() => {
-        let response = '';
-        const taskCount = state.tasks.length;
-        const progressCount = state.tasks.filter(t => t.status === 'progress').length;
-        
-        if (query.toLowerCase().includes('tổng quan') || query.toLowerCase().includes('status')) {
-            response = `Hiện tại workspace có ${taskCount} task. Trong đó có ${progressCount} task đang được thực hiện. Athos đang là người gánh vác nhiều task nhất!`;
-        } else if (query.toLowerCase().includes('ai')) {
-            response = "Tôi có thể giúp bạn viết brief, SOP, email hoặc tóm tắt các task dài. Bạn chỉ cần nhấn vào các nút AI trong form tạo task!";
-        } else {
-            response = `Dựa trên dữ liệu workspace của 3 Musketeers, tôi thấy câu hỏi "${query}" rất thú vị. Tuy nhiên đây là bản demo, tôi sẽ trả lời chi tiết hơn khi kết nối API thực tế!`;
-        }
-        
-        appendChatMessage('ai', response);
-    }, 800);
-}
-
-function appendChatMessage(role, text) {
-    const msg = document.createElement('div');
-    msg.className = role === 'ai' 
-        ? 'bg-white p-3 rounded-lg shadow-sm text-sm border border-purple-100' 
-        : 'bg-indigo-600 text-white p-3 rounded-lg shadow-sm text-sm ml-8';
-    msg.textContent = text;
-    aiChatHistory.appendChild(msg);
-    aiChatHistory.scrollTop = aiChatHistory.scrollHeight;
 }
 
 window.updateTaskStatus = (taskId, direction) => {
