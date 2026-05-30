@@ -1,0 +1,42 @@
+{
+  "input": {
+    "path": "ai\\data\\raw\\sample.jsonl",
+    "size_bytes": 1756
+  },
+  "seed": 42,
+  "ratios": {
+    "train": 0.8,
+    "val": 0.1,
+    "test": 0.09999999999999995
+  },
+  "counts": {
+    "train": 16,
+    "val": 2,
+    "test": 2,
+    "total": 20
+  },
+  "train_stats": {
+    "count": 16,
+    "text_len": {
+      "min": 36,
+      "max": 62,
+      "avg": 54.1875
+    }
+  },
+  "val_stats": {
+    "count": 2,
+    "text_len": {
+      "min": 54,
+      "max": 54,
+      "avg": 54.0
+    }
+  },
+  "test_stats": {
+    "count": 2,
+    "text_len": {
+      "min": 49,
+      "max": 57,
+      "avg": 53.0
+    }
+  }
+}

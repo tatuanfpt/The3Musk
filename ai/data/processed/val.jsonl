@@ -1,0 +1,2 @@
+{"id": "8", "text": "Pipeline cần có checkpoint để resume khi bị gián đoạn."}
+{"id": "9", "text": "Đánh giá mô hình bằng perplexity và latency benchmark."}
