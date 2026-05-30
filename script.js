@@ -50,6 +50,13 @@ const focusModeBtn = document.getElementById("focus-mode-btn");
 const focusModeOverlay = document.getElementById("focus-mode-overlay");
 const closeFocusModeBtn = document.getElementById("close-focus-mode-btn");
 const focusModeTask = document.getElementById("focus-mode-task");
+// AI Knowledge Manager DOM Elements
+const aiAssistantBtn = document.getElementById("ai-assistant-btn");
+const aiPanel = document.getElementById("ai-panel");
+const closeAiPanelBtn = document.getElementById("close-ai-panel");
+const aiChatHistory = document.getElementById("ai-chat-history");
+const aiInput = document.getElementById("ai-input");
+const sendAiQueryBtn = document.getElementById("send-ai-query");
 
 // Initialize
 function init() {
@@ -57,6 +64,7 @@ function init() {
   renderMembers();
   renderTasks();
   setupEventListeners();
+  initAiKnowledgeManager();
 }
 
 // Save state to localStorage
@@ -83,6 +91,19 @@ function escapeHtml(value) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#39;");
+}
+
+function normalizeText(value) {
+  return String(value ?? "")
+    .replaceAll("\r\n", "\n")
+    .replaceAll("\r", "\n")
+    .trim();
+}
+
+function clampText(text, maxLen) {
+  const value = normalizeText(text);
+  if (value.length <= maxLen) return value;
+  return value.slice(0, Math.max(0, maxLen - 1)) + "…";
 }
 
 function isTaskApproved(task) {
@@ -358,6 +379,19 @@ function setupEventListeners() {
   focusModeBtn.onclick = openFocusMode;
   closeFocusModeBtn.onclick = closeFocusMode;
 
+  // AI Knowledge Manager
+  if (aiAssistantBtn) aiAssistantBtn.onclick = toggleAiPanel;
+  if (closeAiPanelBtn) closeAiPanelBtn.onclick = closeAiPanel;
+  if (sendAiQueryBtn) sendAiQueryBtn.onclick = handleAiSubmit;
+  if (aiInput) {
+    aiInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        handleAiSubmit();
+      }
+    });
+  }
+
   // Close modals on outside click
   window.onclick = (e) => {
     if (e.target === taskModal) closeTaskModal();
@@ -540,6 +574,439 @@ function openFocusMode() {
 function closeFocusMode() {
   focusModeOverlay.classList.add("hidden");
 }
+
+// ----------------------
+// AI Knowledge Manager (Agent Workflow)
+// ----------------------
+
+const aiState = {
+  requirementsRaw: "",
+  requirements: null,
+  ready: false,
+};
+
+async function initAiKnowledgeManager() {
+  if (!aiChatHistory || !aiInput || !sendAiQueryBtn || !aiPanel) return;
+
+  if (aiChatHistory.children.length === 0) {
+    addAiMessage({
+      role: "assistant",
+      text: "Chào Musketeer! Mình có thể phân tích REQUIREMENTS.md và trả lời theo workflow Input → Processing → Output.\nGợi ý: 'tóm tắt requirements', 'liệt kê BR', 'liệt kê FR', 'epic 6 là gì?', 'team assignment'.",
+    });
+  }
+
+  try {
+    const raw = await fetch("./REQUIREMENTS.md", { cache: "no-store" }).then(
+      (r) => {
+        if (!r.ok) throw new Error("Không load được REQUIREMENTS.md");
+        return r.text();
+      },
+    );
+    aiState.requirementsRaw = raw;
+    aiState.requirements = parseRequirementsMarkdown(raw);
+    aiState.ready = true;
+  } catch (err) {
+    aiState.ready = false;
+    addAiMessage({
+      role: "assistant",
+      text: `Không thể load REQUIREMENTS.md trong browser. Lý do: ${err?.message || "unknown"}.`,
+    });
+  }
+}
+
+function toggleAiPanel() {
+  if (!aiPanel) return;
+  aiPanel.classList.toggle("translate-x-full");
+  if (!aiPanel.classList.contains("translate-x-full")) {
+    aiInput?.focus();
+  }
+}
+
+function closeAiPanel() {
+  if (!aiPanel) return;
+  aiPanel.classList.add("translate-x-full");
+}
+
+function addAiMessage({ role, text }) {
+  if (!aiChatHistory) return;
+  const safeText = escapeHtml(text);
+  const wrapper = document.createElement("div");
+  wrapper.className = `flex ${role === "user" ? "justify-end" : "justify-start"}`;
+  wrapper.innerHTML = `
+    <div class="${
+      role === "user"
+        ? "bg-purple-600 text-white"
+        : "bg-white text-gray-900 dark:bg-gray-800 dark:text-gray-100"
+    } max-w-[85%] rounded-2xl px-4 py-3 text-sm shadow-sm border border-purple-100 dark:border-gray-700 whitespace-pre-wrap">${safeText}</div>
+  `;
+  aiChatHistory.appendChild(wrapper);
+  aiChatHistory.scrollTop = aiChatHistory.scrollHeight;
+}
+
+function handleAiSubmit() {
+  const q = aiInput?.value?.trim();
+  if (!q) return;
+  addAiMessage({ role: "user", text: q });
+  aiInput.value = "";
+
+  const response = runAiWorkflow(q);
+  addAiMessage({ role: "assistant", text: response });
+}
+
+function runAiWorkflow(query) {
+  const input = normalizeText(query);
+
+  const intent = routeAiIntent(input);
+  const processing = buildProcessingTrace(intent);
+  const output = executeAiIntent(intent);
+
+  return `Input:\n- ${input}\n\nProcessing:\n${processing}\n\nOutput:\n${output}`;
+}
+
+function routeAiIntent(input) {
+  const q = input.toLowerCase();
+
+  if (q.startsWith("tạo task") || q.startsWith("tao task")) {
+    const title = input.split(":").slice(1).join(":").trim();
+    return { type: "create_task", title };
+  }
+
+  if (
+    q.includes("tóm tắt requirements") ||
+    q.includes("tom tat requirements") ||
+    q.includes("requirements là gì") ||
+    q.includes("requirements.md")
+  ) {
+    return { type: "requirements_summary" };
+  }
+
+  if (q.includes("business objective") || q.includes("mục tiêu")) {
+    return { type: "business_objective" };
+  }
+
+  if (
+    q.includes("business rule") ||
+    q.includes("quy tắc") ||
+    q.includes("br-") ||
+    q === "br"
+  ) {
+    return { type: "business_rules" };
+  }
+
+  if (q.includes("functional requirement") || q.includes("fr-") || q === "fr") {
+    return { type: "functional_requirements" };
+  }
+
+  if (q.includes("epic")) {
+    const match = q.match(/epic\s*(\d+)/);
+    return { type: "epic", epicId: match ? match[1] : null };
+  }
+
+  if (
+    q.includes("team") ||
+    q.includes("phân công") ||
+    q.includes("assignment")
+  ) {
+    return { type: "team_assignment" };
+  }
+
+  if (
+    q.includes("workspace") ||
+    q.includes("tình hình") ||
+    q.includes("tinh hinh")
+  ) {
+    return { type: "workspace_overview" };
+  }
+
+  if (q.includes("one thing") || q.includes("hôm nay") || q.includes("today")) {
+    return { type: "one_thing_today" };
+  }
+
+  return { type: "help" };
+}
+
+function buildProcessingTrace(intent) {
+  const steps = [];
+  steps.push(`- Intent: ${intent.type}`);
+  if (intent.type === "epic")
+    steps.push(`- Extract epicId: ${intent.epicId ?? "(none)"}`);
+  if (intent.type === "create_task")
+    steps.push(`- Extract title: ${intent.title ? "ok" : "missing"}`);
+  steps.push(
+    `- Load REQUIREMENTS.md: ${aiState.ready ? "ready" : "not-ready"}`,
+  );
+  if (intent.type !== "create_task")
+    steps.push("- Retrieve knowledge sections from parsed markdown");
+  if (intent.type === "workspace_overview" || intent.type === "one_thing_today")
+    steps.push("- Read current state (members/tasks) from LocalStorage state");
+  if (intent.type === "create_task")
+    steps.push("- Execute action: create task in state + persist");
+  return steps.join("\n");
+}
+
+function executeAiIntent(intent) {
+  if (intent.type === "create_task") {
+    const title = normalizeText(intent.title);
+    if (!title) {
+      return 'Cú pháp: "tạo task: <tiêu đề>"';
+    }
+    const newTask = {
+      id: Date.now().toString(),
+      title: clampText(title, 80),
+      description: "",
+      assigneeId: state.currentUser ?? state.members[0]?.id ?? "",
+      deadline: "",
+      status: "todo",
+      createdAt: new Date().toISOString(),
+      reviewedBy: [],
+    };
+    state.tasks.push(newTask);
+    saveState();
+    renderTasks();
+    return `Đã tạo task: ${newTask.title} (status: Todo)`;
+  }
+
+  if (!aiState.ready || !aiState.requirements) {
+    return "Hiện chưa load được REQUIREMENTS.md. Bạn thử refresh trang hoặc chạy qua server (GitHub Pages / http server) để fetch file hoạt động.";
+  }
+
+  const req = aiState.requirements;
+
+  switch (intent.type) {
+    case "requirements_summary":
+      return [
+        "Business Objective:",
+        `- ${req.businessObjective?.headline || ""}`,
+        ...(req.businessObjective?.goals?.map((g) => `- ${g}`) ?? []),
+        "",
+        "Business Rules:",
+        ...(req.businessRules?.map((r) => `- ${r.id}: ${r.text}`) ?? []),
+        "",
+        "Functional Requirements:",
+        ...(req.functionalRequirements?.map(
+          (fr) => `- ${fr.id}: ${fr.feature} (${fr.priority}, ${fr.epic})`,
+        ) ?? []),
+      ].join("\n");
+
+    case "business_objective":
+      return [
+        req.businessObjective?.headline || "",
+        ...(req.businessObjective?.goals?.map((g) => `- ${g}`) ?? []),
+      ].join("\n");
+
+    case "business_rules":
+      return (req.businessRules ?? [])
+        .map((r) => `- ${r.id}: ${r.text}`)
+        .join("\n");
+
+    case "functional_requirements":
+      return (req.functionalRequirements ?? [])
+        .map(
+          (fr) =>
+            `- ${fr.id}: ${fr.feature}\n  - ${fr.detail}\n  - Priority: ${fr.priority}\n  - Epic: ${fr.epic}`,
+        )
+        .join("\n");
+
+    case "epic": {
+      const epicId = intent.epicId ? `Epic ${intent.epicId}` : null;
+      const list = epicId
+        ? (req.functionalRequirements ?? []).filter((fr) => fr.epic === epicId)
+        : (req.functionalRequirements ?? []);
+      if (!epicId) {
+        const byEpic = new Map();
+        list.forEach((fr) => {
+          const key = fr.epic || "Unknown";
+          byEpic.set(key, [...(byEpic.get(key) ?? []), fr]);
+        });
+        return Array.from(byEpic.entries())
+          .map(
+            ([ep, items]) =>
+              `${ep}\n${items.map((x) => `- ${x.id}: ${x.feature}`).join("\n")}`,
+          )
+          .join("\n\n");
+      }
+      return `${epicId}\n${list.map((x) => `- ${x.id}: ${x.feature}`).join("\n") || "(không có)"}`;
+    }
+
+    case "team_assignment":
+      return (req.teamAssignment ?? [])
+        .map((m) => `- ${m.name}: ${m.role}`)
+        .join("\n");
+
+    case "workspace_overview": {
+      const statusCounts = { todo: 0, progress: 0, review: 0, done: 0 };
+      state.tasks.forEach((t) => {
+        if (statusCounts[t.status] !== undefined) statusCounts[t.status]++;
+      });
+      return [
+        `Tổng tasks: ${state.tasks.length}`,
+        `Todo: ${statusCounts.todo}`,
+        `In Progress: ${statusCounts.progress}`,
+        `Review: ${statusCounts.review}`,
+        `Done: ${statusCounts.done}`,
+      ].join("\n");
+    }
+
+    case "one_thing_today": {
+      const oneThing = getOneThingPriority();
+      if (!oneThing) return "Bạn không có task pending nào.";
+      return `One Thing: ${oneThing.title}\n- Status: ${getStatusText(oneThing.status)}${oneThing.deadline ? `\n- Deadline: ${formatDate(oneThing.deadline)}` : ""}`;
+    }
+
+    default:
+      return "Gợi ý: 'tóm tắt requirements', 'mục tiêu', 'liệt kê BR', 'liệt kê FR', 'epic 6', 'team assignment', 'tình hình workspace', 'tạo task: ...'";
+  }
+}
+
+function parseRequirementsMarkdown(raw) {
+  const text = normalizeText(raw);
+  const lines = text.split("\n");
+
+  const businessObjective = { headline: "", goals: [] };
+  const businessRules = [];
+  const functionalRequirements = [];
+  const teamAssignment = [];
+
+  let inBusinessObjective = false;
+  let inBusinessRules = false;
+  let inFRTable = false;
+  let inTeam = false;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+
+    if (line.startsWith("## 1.")) {
+      inBusinessObjective = true;
+      inBusinessRules = false;
+      inFRTable = false;
+      inTeam = false;
+      continue;
+    }
+    if (line.startsWith("## 2.")) {
+      inBusinessObjective = false;
+      inBusinessRules = true;
+      inFRTable = false;
+      inTeam = false;
+      continue;
+    }
+    if (line.startsWith("### 3.1.")) {
+      inBusinessObjective = false;
+      inBusinessRules = false;
+      inFRTable = false;
+      inTeam = false;
+      continue;
+    }
+    if (line.startsWith("## 4.")) {
+      inBusinessObjective = false;
+      inBusinessRules = false;
+      inFRTable = false;
+      inTeam = true;
+      continue;
+    }
+
+    if (inBusinessObjective) {
+      if (!businessObjective.headline && line && !line.startsWith("-")) {
+        businessObjective.headline = line.replaceAll("**", "");
+      }
+      const goalMatch = line.match(/^- \*\*Mục tiêu \d+:\*\*\s*(.+)$/);
+      if (goalMatch) businessObjective.goals.push(goalMatch[1].trim());
+    }
+
+    if (inBusinessRules) {
+      const brMatch = line.match(/^- \*\*(BR-\d+):\*\*\s*(.+)$/);
+      if (brMatch)
+        businessRules.push({ id: brMatch[1], text: brMatch[2].trim() });
+    }
+
+    if (line.startsWith("| FR-") || line.startsWith("| ID |")) {
+      inFRTable = true;
+    }
+
+    if (inFRTable) {
+      if (!line.startsWith("|")) continue;
+      if (line.startsWith("|---")) continue;
+      if (line.startsWith("| ID |")) continue;
+      const cells = line
+        .split("|")
+        .map((c) => c.trim())
+        .filter((c) => c.length > 0);
+      if (cells.length >= 5 && cells[0].startsWith("FR-")) {
+        functionalRequirements.push({
+          id: cells[0],
+          feature: cells[1],
+          detail: cells[2],
+          priority: cells[3],
+          epic: cells[4],
+        });
+      }
+    }
+
+    if (inTeam) {
+      const teamMatch = line.match(/^- \*\*(.+?):\*\*\s*(.+)$/);
+      if (teamMatch)
+        teamAssignment.push({
+          name: teamMatch[1].trim(),
+          role: teamMatch[2].trim(),
+        });
+    }
+  }
+
+  return {
+    businessObjective,
+    businessRules,
+    functionalRequirements,
+    teamAssignment,
+  };
+}
+
+window.aiAction = (action) => {
+  const titleEl = document.getElementById("task-title");
+  const descEl = document.getElementById("task-desc");
+  const title = titleEl?.value ?? "";
+  const desc = descEl?.value ?? "";
+
+  if (action === "optimize-title") {
+    const cleaned = clampText(
+      normalizeText(title)
+        .replaceAll(/\s+/g, " ")
+        .replaceAll(/\s*[-–—]\s*/g, " - "),
+      80,
+    );
+    if (titleEl) titleEl.value = cleaned;
+    return;
+  }
+
+  if (action === "fix-grammar") {
+    const fixed = normalizeText(desc)
+      .replaceAll(/\s+/g, " ")
+      .replaceAll(" ,", ",")
+      .replaceAll(" .", ".")
+      .replaceAll(" !", "!")
+      .replaceAll(" ?", "?");
+    if (descEl) descEl.value = fixed;
+    return;
+  }
+
+  if (action === "summarize") {
+    const fixed = normalizeText(desc);
+    const sentence = fixed.split(/[.!?]\s/)[0] ?? fixed;
+    if (descEl) descEl.value = clampText(sentence, 160);
+    return;
+  }
+
+  if (action === "rewrite-professional") {
+    const fixed = normalizeText(desc);
+    if (!fixed) return;
+    const lines = fixed
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean);
+    const bullets = lines
+      .map((l) => `- ${l.replaceAll(/^[*-]\s*/, "")}`)
+      .join("\n");
+    if (descEl) descEl.value = bullets;
+  }
+};
 
 function openTaskModal(task = null) {
   const modalTitle = document.getElementById("task-modal-title");
