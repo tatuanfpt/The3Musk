@@ -100,8 +100,12 @@ const aiMessages = document.getElementById("ai-messages");
 
 const taskSortModeSelect = document.getElementById("task-sort-mode");
 const taskFilterKeywordInput = document.getElementById("task-filter-keyword");
-const taskFilterPrioritySelect = document.getElementById("task-filter-priority");
-const taskFilterProgressSelect = document.getElementById("task-filter-progress");
+const taskFilterPrioritySelect = document.getElementById(
+  "task-filter-priority",
+);
+const taskFilterProgressSelect = document.getElementById(
+  "task-filter-progress",
+);
 const taskFilterComplexitySelect = document.getElementById(
   "task-filter-complexity",
 );
@@ -320,7 +324,9 @@ function renderOKRs() {
                 const target = Number(kr.target) || 0;
                 const current = Number(kr.current) || 0;
                 const krPct =
-                  target > 0 ? Math.round((Math.min(current, target) / target) * 100) : 0;
+                  target > 0
+                    ? Math.round((Math.min(current, target) / target) * 100)
+                    : 0;
                 return `
                   <div class="text-xs text-gray-600">
                     <div class="flex items-center justify-between gap-3">
@@ -413,7 +419,8 @@ function addKrRow(kr = null) {
   row.className =
     "grid grid-cols-1 md:grid-cols-12 gap-3 items-end p-3 rounded-xl bg-gray-50 border border-gray-200 dark:bg-gray-900/30 dark:border-gray-700";
   row.dataset.krRow = "true";
-  const id = kr?.id || Date.now().toString() + Math.random().toString(16).slice(2);
+  const id =
+    kr?.id || Date.now().toString() + Math.random().toString(16).slice(2);
 
   row.innerHTML = `
     <div class="md:col-span-6">
@@ -527,10 +534,23 @@ function renderTasks() {
   const statusOrder = { todo: 0, progress: 1, review: 2, done: 3 };
   const keyword = (taskView.keyword || "").trim().toLowerCase();
   const tasksFiltered = state.tasks.filter((t) => {
-    if (keyword && !(t.title || "").toLowerCase().includes(keyword)) return false;
-    if (taskView.filters.priority !== "all" && t.priority !== taskView.filters.priority) return false;
-    if (taskView.filters.progress !== "all" && t.progressState !== taskView.filters.progress) return false;
-    if (taskView.filters.complexity !== "all" && t.complexity !== taskView.filters.complexity) return false;
+    if (keyword && !(t.title || "").toLowerCase().includes(keyword))
+      return false;
+    if (
+      taskView.filters.priority !== "all" &&
+      t.priority !== taskView.filters.priority
+    )
+      return false;
+    if (
+      taskView.filters.progress !== "all" &&
+      t.progressState !== taskView.filters.progress
+    )
+      return false;
+    if (
+      taskView.filters.complexity !== "all" &&
+      t.complexity !== taskView.filters.complexity
+    )
+      return false;
     return true;
   });
 
@@ -549,8 +569,12 @@ function renderTasks() {
         (complexityRank[a.complexity] ?? 1) -
         (complexityRank[b.complexity] ?? 1);
     } else if (field === "deadline") {
-      const aTs = a.deadline ? new Date(a.deadline).getTime() : Number.POSITIVE_INFINITY;
-      const bTs = b.deadline ? new Date(b.deadline).getTime() : Number.POSITIVE_INFINITY;
+      const aTs = a.deadline
+        ? new Date(a.deadline).getTime()
+        : Number.POSITIVE_INFINITY;
+      const bTs = b.deadline
+        ? new Date(b.deadline).getTime()
+        : Number.POSITIVE_INFINITY;
       delta = aTs - bTs;
     } else if (field === "title") {
       delta = String(a.title || "").localeCompare(String(b.title || ""), "vi");
@@ -560,7 +584,9 @@ function renderTasks() {
   };
 
   const compareRank = (a, b) => {
-    const specs = (taskView.sort || []).filter((s) => s && s.field && s.field !== "none");
+    const specs = (taskView.sort || []).filter(
+      (s) => s && s.field && s.field !== "none",
+    );
     for (const s of specs) {
       const d = compareByField(a, b, s.field, s.dir);
       if (d !== 0) return d;
@@ -788,7 +814,8 @@ function openReviewModal(taskId) {
   const reviewComplexity = document.getElementById("review-complexity");
   if (reviewPriority) reviewPriority.value = task.priority || "medium";
   if (reviewProgress)
-    reviewProgress.value = task.progressState || statusToProgressState(task.status);
+    reviewProgress.value =
+      task.progressState || statusToProgressState(task.status);
   if (reviewComplexity) reviewComplexity.value = task.complexity || "medium";
 
   const reviewAssigneeSelect = document.getElementById("review-assignee");
@@ -827,7 +854,10 @@ function submitReviewDecision(decision) {
   task.description = document.getElementById("review-description").value;
   task.assigneeId = document.getElementById("review-assignee").value;
   task.deadline = document.getElementById("review-deadline").value;
-  task.priority = document.getElementById("review-priority")?.value || task.priority || "medium";
+  task.priority =
+    document.getElementById("review-priority")?.value ||
+    task.priority ||
+    "medium";
   task.progressState =
     document.getElementById("review-progress")?.value ||
     task.progressState ||
@@ -998,7 +1028,8 @@ window.aiAction = async (type) => {
   const titleInput = document.getElementById("task-title");
   const descInput = document.getElementById("task-desc");
 
-  const content = type === "optimize-title" ? titleInput.value : descInput.value;
+  const content =
+    type === "optimize-title" ? titleInput.value : descInput.value;
   if (!content) return alert("Vui lòng nhập nội dung trước khi dùng AI!");
 
   if (type === "optimize-title") titleInput.value = "AI đang xử lý...";
@@ -1037,11 +1068,192 @@ let aiHasWelcomed = false;
 let geminiAvailable = true;
 let geminiAbortController = null;
 const geminiCache = new Map();
+const requirementsState = { raw: "", parsed: null, ready: false, error: null };
+
+function parseRequirementsMarkdown(raw) {
+  const lines = String(raw || "")
+    .replace(/\r\n/g, "\n")
+    .split("\n");
+
+  const findIndex = (re) => lines.findIndex((l) => re.test(l));
+  const sliceBetween = (startRe, endRe) => {
+    const start = findIndex(startRe);
+    if (start === -1) return "";
+    const end = lines.slice(start + 1).findIndex((l) => endRe.test(l));
+    const endAbs = end === -1 ? lines.length : start + 1 + end;
+    return lines
+      .slice(start + 1, endAbs)
+      .filter((l) => l.trim() && l.trim() !== "---")
+      .join("\n")
+      .trim();
+  };
+
+  const businessObjective = sliceBetween(/^##\s+1\./, /^##\s+2\./);
+
+  const businessRulesBlock = sliceBetween(/^##\s+2\./, /^##\s+3\./);
+  const businessRules = businessRulesBlock
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l.startsWith("-"))
+    .map((l) => {
+      const m = l.match(/\*\*(BR-[0-9]+)\*\*:\s*(.+)$/);
+      if (!m) return null;
+      return { id: m[1], text: m[2].trim() };
+    })
+    .filter(Boolean);
+
+  const frStart = findIndex(/^###\s+3\.1\./);
+  const frEnd = lines
+    .slice(frStart + 1)
+    .findIndex((l) => /^###\s+3\.2\./.test(l));
+  const frLines =
+    frStart === -1
+      ? []
+      : lines.slice(
+          frStart + 1,
+          frEnd === -1 ? lines.length : frStart + 1 + frEnd,
+        );
+
+  const functionalRequirements = frLines
+    .map((l) => l.trim())
+    .filter((l) => l.startsWith("| FR-"))
+    .map((row) => {
+      const cols = row
+        .split("|")
+        .map((x) => x.trim())
+        .filter((x) => x.length > 0);
+      if (cols.length < 5) return null;
+      return {
+        id: cols[0],
+        title: cols[1],
+        detail: cols[2],
+        priority: cols[3],
+        epic: cols[4],
+      };
+    })
+    .filter(Boolean);
+
+  const teamBlock = sliceBetween(/^##\s+4\./, /^##\s+5\./);
+  const teamAssignment = teamBlock
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l.startsWith("-"))
+    .map((l) => {
+      const m = l.match(/-\s+\*\*(.+?)\*\*:\s*(.+)$/);
+      if (!m) return null;
+      return { member: m[1].trim(), responsibility: m[2].trim() };
+    })
+    .filter(Boolean);
+
+  const epics = {};
+  functionalRequirements.forEach((fr) => {
+    const epic = fr.epic || "Backlog";
+    if (!epics[epic]) epics[epic] = [];
+    epics[epic].push(fr);
+  });
+
+  return {
+    businessObjective,
+    businessRules,
+    functionalRequirements,
+    epics,
+    teamAssignment,
+  };
+}
+
+async function loadRequirementsMarkdown() {
+  try {
+    const raw = await fetch("./REQUIREMENTS.md", { cache: "no-store" }).then(
+      (r) => {
+        if (!r.ok) throw new Error("Không load được REQUIREMENTS.md");
+        return r.text();
+      },
+    );
+    requirementsState.raw = raw;
+    requirementsState.parsed = parseRequirementsMarkdown(raw);
+    requirementsState.ready = true;
+    requirementsState.error = null;
+  } catch (e) {
+    requirementsState.ready = false;
+    requirementsState.error = String(e?.message || e || "unknown");
+  }
+}
+
+function answerRequirementsQuery(query) {
+  const q = normalizeForNlp(query);
+  if (!requirementsState.ready || !requirementsState.parsed) {
+    return `Chưa load được REQUIREMENTS.md. Lý do: ${requirementsState.error || "unknown"}.`;
+  }
+
+  const r = requirementsState.parsed;
+
+  if (
+    q.includes("team") ||
+    q.includes("phan cong") ||
+    q.includes("assignment")
+  ) {
+    if (!r.teamAssignment.length)
+      return "Không tìm thấy mục Team & Task Assignment.";
+    return `Team & Task Assignment:\n${r.teamAssignment
+      .map((x, idx) => `- ${idx + 1}. ${x.member}: ${x.responsibility}`)
+      .join("\n")}`;
+  }
+
+  if (
+    q.includes("business rule") ||
+    q.includes("quy tac") ||
+    q.includes("br-") ||
+    q === "br"
+  ) {
+    if (!r.businessRules.length) return "Không tìm thấy mục Business Rules.";
+    return `Business Rules (${r.businessRules.length}):\n${r.businessRules
+      .map((x) => `- ${x.id}: ${x.text}`)
+      .join("\n")}`;
+  }
+
+  if (q.includes("functional requirement") || q.includes("fr-") || q === "fr") {
+    if (!r.functionalRequirements.length)
+      return "Không tìm thấy bảng Functional Requirements.";
+    const head = r.functionalRequirements.slice(0, 12);
+    const more =
+      r.functionalRequirements.length > head.length
+        ? `\n... (+${r.functionalRequirements.length - head.length} dòng)`
+        : "";
+    return `Functional Requirements (${r.functionalRequirements.length}):\n${head
+      .map((x) => `- ${x.id} (${x.priority}, ${x.epic}): ${x.title}`)
+      .join("\n")}${more}`;
+  }
+
+  if (q.includes("epic")) {
+    const m = q.match(/epic\s*(\d+)/);
+    const key = m ? `Epic ${m[1]}` : null;
+    if (key && r.epics[key]) {
+      return `${key}:\n${r.epics[key]
+        .map((x) => `- ${x.id} (${x.priority}): ${x.title}`)
+        .join("\n")}`;
+    }
+    const keys = Object.keys(r.epics);
+    if (!keys.length)
+      return "Không tìm thấy Epic nào trong Functional Requirements.";
+    return `Các Epic hiện có:\n${keys
+      .map((k) => `- ${k}: ${r.epics[k].length} FR`)
+      .join("\n")}\nGợi ý: hỏi 'epic 6'`;
+  }
+
+  if (q.includes("business objective") || q.includes("muc tieu")) {
+    return r.businessObjective
+      ? `Business Objective:\n${r.businessObjective}`
+      : "Không tìm thấy mục Business Objective.";
+  }
+
+  return `Tóm tắt REQUIREMENTS.md:\n- Business Rules: ${r.businessRules.length}\n- Functional Requirements: ${r.functionalRequirements.length}\n- Epic: ${Object.keys(r.epics).length}\n- Team assignment: ${r.teamAssignment.length}\n\nGợi ý: "liệt kê BR", "liệt kê FR", "epic 6", "team assignment".`;
+}
 
 function initAiAssistant() {
   aiPanel.classList.add("hidden");
   setAiMode(aiMode);
   renderAiToggle();
+  loadRequirementsMarkdown();
   if (!aiHasWelcomed) {
     appendAiMessage(
       "ai",
@@ -1300,14 +1512,204 @@ function getOneThingPriority() {
   })[0];
 }
 
-function processOneThingQuery(query) {
-  const lowerQuery = query.toLowerCase();
+function removeDiacritics(value) {
+  return (value ?? "")
+    .toString()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
 
-  if (
-    lowerQuery.includes("hôm nay") ||
-    lowerQuery.includes("today") ||
-    lowerQuery.includes("one thing")
-  ) {
+function normalizeForNlp(value) {
+  const cleaned = removeDiacritics(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9\s:]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return cleaned;
+}
+
+function findMemberByQuery(queryNlp) {
+  if (!queryNlp) return null;
+  const direct = state.members.find((m) =>
+    queryNlp.includes(normalizeForNlp(m.name)),
+  );
+  if (direct) return direct;
+
+  const tokens = queryNlp.split(" ").filter(Boolean);
+  for (const m of state.members) {
+    const nameTokens = normalizeForNlp(m.name).split(" ").filter(Boolean);
+    if (nameTokens.length === 0) continue;
+    const hitCount = nameTokens.filter((t) => tokens.includes(t)).length;
+    if (hitCount >= Math.min(2, nameTokens.length)) return m;
+  }
+  return null;
+}
+
+function getStatusRank(status) {
+  const statusOrder = { progress: 0, review: 1, todo: 2, done: 3 };
+  return statusOrder[status] ?? 99;
+}
+
+function scoreTaskForPriority(task) {
+  const now = new Date();
+  const deadline = task.deadline ? new Date(task.deadline) : null;
+  const overdue = deadline && deadline < now && task.status !== "done";
+  const deadlineScore = deadline
+    ? Math.max(0, (deadline - now) / 86400000)
+    : 999;
+  const statusScore = getStatusRank(task.status);
+  return (overdue ? -1000 : 0) + deadlineScore * 10 + statusScore;
+}
+
+function buildTaskSummary(tasks) {
+  const counts = { todo: 0, progress: 0, review: 0, done: 0 };
+  tasks.forEach((t) => {
+    counts[t.status] = (counts[t.status] ?? 0) + 1;
+  });
+  const active = tasks.filter((t) => t.status !== "done").length;
+  const overdue = tasks.filter(
+    (t) =>
+      t.deadline && new Date(t.deadline) < new Date() && t.status !== "done",
+  ).length;
+  return { counts, active, overdue, total: tasks.length };
+}
+
+function getReviewText(task) {
+  if (task.status !== "review" && task.status !== "done") return "";
+  const approvers = Array.isArray(task.reviewedBy) ? task.reviewedBy : [];
+  if (approvers.length === 0) return "Review: pending";
+  const names = approvers
+    .map((id) => state.members.find((m) => m.id == id)?.name)
+    .filter(Boolean);
+  return `Review: approved by ${names.length ? names.join(", ") : "member"}`;
+}
+
+function formatTaskLine(task) {
+  const parts = [];
+  parts.push(task.title || "(no title)");
+  parts.push(`[${getStatusText(task.status)}]`);
+  if (task.deadline) parts.push(`due ${formatDate(task.deadline)}`);
+  const review = getReviewText(task);
+  if (review) parts.push(`(${review})`);
+  return parts.join(" ");
+}
+
+function groupTasks(tasks, mode) {
+  const groups = new Map();
+  const put = (key, item) => {
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(item);
+  };
+
+  if (mode === "deadline") {
+    tasks.forEach((t) => put(t.deadline ? t.deadline : "no-deadline", t));
+    return [...groups.entries()].sort((a, b) => {
+      if (a[0] === "no-deadline") return 1;
+      if (b[0] === "no-deadline") return -1;
+      return new Date(a[0]) - new Date(b[0]);
+    });
+  }
+
+  tasks.forEach((t) => put(t.status, t));
+  const order = ["progress", "review", "todo", "done"];
+  return [...groups.entries()].sort(
+    (a, b) => order.indexOf(a[0]) - order.indexOf(b[0]),
+  );
+}
+
+function extractKeywordFilter(queryNlp) {
+  const stop = new Set([
+    "task",
+    "tasks",
+    "cong",
+    "viec",
+    "cua",
+    "toi",
+    "minh",
+    "hien",
+    "tai",
+    "dang",
+    "co",
+    "gi",
+    "nao",
+    "nhung",
+    "mot",
+    "so",
+    "hay",
+    "cho",
+    "xem",
+    "ve",
+    "lien",
+    "quan",
+    "hom",
+    "nay",
+    "mai",
+    "tuan",
+    "thang",
+    "nam",
+  ]);
+  const tokens = queryNlp
+    .split(" ")
+    .map((t) => t.trim())
+    .filter(Boolean)
+    .filter((t) => !stop.has(t) && t.length >= 2);
+  return tokens.length ? tokens.slice(0, 4) : [];
+}
+
+function filterTasksByKeywords(tasks, keywords) {
+  if (!keywords || keywords.length === 0) return tasks;
+  return tasks.filter((t) => {
+    const hay = normalizeForNlp(`${t.title ?? ""} ${t.description ?? ""}`);
+    return keywords.every((k) => hay.includes(k));
+  });
+}
+
+function buildStructuredTasksOutput({ header, member, tasks, groupMode }) {
+  const summary = buildTaskSummary(tasks);
+  const oneThing = tasks
+    .filter((t) => t.status !== "done")
+    .slice()
+    .sort((a, b) => scoreTaskForPriority(a) - scoreTaskForPriority(b))[0];
+
+  const lines = [];
+  if (header) lines.push(header);
+  lines.push(`Context: ${member ? member.name : "Team/Workspace"}`);
+  lines.push(
+    `Summary: total=${summary.total}, active=${summary.active}, overdue=${summary.overdue}`,
+  );
+  lines.push(
+    `By status: todo=${summary.counts.todo}, progress=${summary.counts.progress}, review=${summary.counts.review}, done=${summary.counts.done}`,
+  );
+  if (oneThing) lines.push(`One Thing: ${formatTaskLine(oneThing)}`);
+  lines.push("");
+
+  const grouped = groupTasks(tasks, groupMode);
+  grouped.forEach(([key, list]) => {
+    const title =
+      groupMode === "deadline"
+        ? key === "no-deadline"
+          ? "No deadline"
+          : `Due ${formatDate(key)}`
+        : getStatusText(key);
+    const sorted = list
+      .slice()
+      .sort((a, b) => scoreTaskForPriority(a) - scoreTaskForPriority(b));
+    lines.push(`${title} (${sorted.length})`);
+    sorted.forEach((t, idx) => {
+      const detail = t.description ? ` — ${clampText(t.description, 90)}` : "";
+      lines.push(`- ${idx + 1}. ${formatTaskLine(t)}${detail}`);
+    });
+    lines.push("");
+  });
+
+  return lines.join("\n").trim();
+}
+
+function processOneThingQuery(query) {
+  const raw = query ?? "";
+  const q = normalizeForNlp(raw);
+
+  if (q.includes("hom nay") || q.includes("today") || q.includes("one thing")) {
     const oneThing = getOneThingPriority();
     if (!oneThing) {
       return "Chúc mừng! Bạn không còn task nào chưa hoàn thành! 🎉";
@@ -1322,40 +1724,91 @@ ${oneThing.deadline ? `- Hạn nộp: ${formatDate(oneThing.deadline)}` : ""}
 - Trạng thái: ${getStatusText(oneThing.status)}`;
   }
 
-  if (lowerQuery.includes("task của tôi") || lowerQuery.includes("my tasks")) {
+  if (q.includes("task cua toi") || q.includes("my tasks")) {
     const myTasks = getCurrentUserTasks();
     if (myTasks.length === 0) {
       return "Bạn không có task nào! 🎉";
     }
-    return `📋 **Your Tasks** (${myTasks.length})
-
-${myTasks
-  .map(
-    (task, idx) =>
-      `${idx + 1}. ${task.title} [${getStatusText(task.status)}]${
-        task.deadline ? ` - ${formatDate(task.deadline)}` : ""
-      }`,
-  )
-  .join("\n")}`;
+    const member = state.members.find((m) => m.id == state.currentUser) ?? null;
+    return buildStructuredTasksOutput({
+      header: "Your Tasks",
+      member,
+      tasks: myTasks.slice(),
+      groupMode:
+        q.includes("deadline") || q.includes("han") ? "deadline" : "status",
+    });
   }
 
-  if (lowerQuery.includes("team") || lowerQuery.includes("team ra sao")) {
-    const statusCounts = { todo: 0, progress: 0, review: 0, done: 0 };
-    state.tasks.forEach((t) => statusCounts[t.status]++);
-
-    return `👥 **Team Overview**
-
-- Tổng tasks: ${state.tasks.length}
-- Cần làm: ${statusCounts.todo}
-- Đang làm: ${statusCounts.progress}
-- Đang review: ${statusCounts.review}
-- Hoàn thành: ${statusCounts.done}
-
-Thành viên:
-${state.members.map((m) => `- ${m.name}`).join("\n")}`;
+  if (
+    q.includes("team") ||
+    q.includes("nhom") ||
+    q.includes("team ra sao") ||
+    q.includes("tong quan")
+  ) {
+    return buildStructuredTasksOutput({
+      header: "Team Overview",
+      member: null,
+      tasks: state.tasks.slice(),
+      groupMode:
+        q.includes("deadline") || q.includes("han") ? "deadline" : "status",
+    });
   }
 
-  return "Xin lỗi, tôi không hiểu câu hỏi! Hãy thử hỏi: 'hôm nay làm gì?' hoặc 'task của tôi?'";
+  const member = findMemberByQuery(q);
+  const hasTaskWord = q.includes("task") || q.includes("cong viec");
+  if (
+    member &&
+    (hasTaskWord || q.includes("dang co") || q.includes("hien tai"))
+  ) {
+    const includeDone = q.includes("tat ca") || q.includes("all");
+    const base = state.tasks.filter((t) => t.assigneeId == member.id);
+    const activeOnly = includeDone
+      ? base
+      : base.filter((t) => t.status !== "done");
+    const keywords = extractKeywordFilter(q);
+    const filtered = filterTasksByKeywords(activeOnly, keywords);
+    if (filtered.length === 0) {
+      const hint =
+        keywords.length > 0
+          ? `Không tìm thấy task của ${member.name} khớp từ khoá: ${keywords.join(", ")}.`
+          : `Hiện không có task nào cho ${member.name}.`;
+      return `${hint}\nGợi ý: thử 'tất cả task của ${member.name}' hoặc 'team ra sao?'.`;
+    }
+    return buildStructuredTasksOutput({
+      header: `Tasks for ${member.name}`,
+      member,
+      tasks: filtered.slice(),
+      groupMode:
+        q.includes("deadline") || q.includes("han") ? "deadline" : "status",
+    });
+  }
+
+  if (q.includes("qua han") || q.includes("overdue")) {
+    const overdueTasks = state.tasks.filter(
+      (t) =>
+        t.deadline && new Date(t.deadline) < new Date() && t.status !== "done",
+    );
+    if (overdueTasks.length === 0) return "Hiện không có task quá hạn.";
+    return buildStructuredTasksOutput({
+      header: "Overdue Tasks",
+      member: null,
+      tasks: overdueTasks.slice(),
+      groupMode: "status",
+    });
+  }
+
+  if (
+    q.includes("khong thay gi") ||
+    q.includes("khong thay") ||
+    q.includes("khong co gi") ||
+    q.includes("khong hieu")
+  ) {
+    const current = state.members.find((m) => m.id == state.currentUser);
+    return `Mình có thể giúp bạn theo 3 hướng:\n1) One Thing hôm nay: "hôm nay làm gì?"\n2) Task của bạn: "task của tôi"\n3) Task của người khác: "Tuấn đang có task gì"\n\nHiện user đang chọn: ${current?.name || "Unknown"}`;
+  }
+
+  const membersHint = state.members.map((m) => m.name).join(", ");
+  return `Mình chưa hiểu rõ ý bạn. Bạn có thể thử:\n- "hôm nay làm gì?"\n- "task của tôi"\n- "<tên> đang có task gì" (vd: Tuấn/Thắng/Nhật)\n- "team ra sao"\n- "task quá hạn"\n\nMembers: ${membersHint}`;
 }
 
 function openFocusMode() {
@@ -1435,7 +1888,8 @@ function openTaskModal(task = null) {
     deadlineInput.value = task.deadline || "";
     if (priorityInput) priorityInput.value = task.priority || "medium";
     if (progressInput)
-      progressInput.value = task.progressState || statusToProgressState(task.status);
+      progressInput.value =
+        task.progressState || statusToProgressState(task.status);
     if (complexityInput) complexityInput.value = task.complexity || "medium";
   } else {
     modalTitle.textContent = "Giao Task mới";
@@ -1827,12 +2281,18 @@ function setupTaskViewControls() {
   if (taskFilterComplexitySelect)
     taskFilterComplexitySelect.value = taskView.filters.complexity;
 
-  if (taskSort1Select) taskSort1Select.value = taskView.sort[0]?.field || "score";
-  if (taskSort1DirSelect) taskSort1DirSelect.value = taskView.sort[0]?.dir || "desc";
-  if (taskSort2Select) taskSort2Select.value = taskView.sort[1]?.field || "none";
-  if (taskSort2DirSelect) taskSort2DirSelect.value = taskView.sort[1]?.dir || "desc";
-  if (taskSort3Select) taskSort3Select.value = taskView.sort[2]?.field || "none";
-  if (taskSort3DirSelect) taskSort3DirSelect.value = taskView.sort[2]?.dir || "desc";
+  if (taskSort1Select)
+    taskSort1Select.value = taskView.sort[0]?.field || "score";
+  if (taskSort1DirSelect)
+    taskSort1DirSelect.value = taskView.sort[0]?.dir || "desc";
+  if (taskSort2Select)
+    taskSort2Select.value = taskView.sort[1]?.field || "none";
+  if (taskSort2DirSelect)
+    taskSort2DirSelect.value = taskView.sort[1]?.dir || "desc";
+  if (taskSort3Select)
+    taskSort3Select.value = taskView.sort[2]?.field || "none";
+  if (taskSort3DirSelect)
+    taskSort3DirSelect.value = taskView.sort[2]?.dir || "desc";
 
   const onChange = () => {
     taskView.sortMode = taskSortModeSelect.value;
@@ -1841,9 +2301,18 @@ function setupTaskViewControls() {
     taskView.filters.progress = taskFilterProgressSelect?.value || "all";
     taskView.filters.complexity = taskFilterComplexitySelect?.value || "all";
     taskView.sort = [
-      { field: taskSort1Select?.value || "score", dir: taskSort1DirSelect?.value || "desc" },
-      { field: taskSort2Select?.value || "none", dir: taskSort2DirSelect?.value || "desc" },
-      { field: taskSort3Select?.value || "none", dir: taskSort3DirSelect?.value || "desc" },
+      {
+        field: taskSort1Select?.value || "score",
+        dir: taskSort1DirSelect?.value || "desc",
+      },
+      {
+        field: taskSort2Select?.value || "none",
+        dir: taskSort2DirSelect?.value || "desc",
+      },
+      {
+        field: taskSort3Select?.value || "none",
+        dir: taskSort3DirSelect?.value || "desc",
+      },
     ];
     saveTaskView();
     renderTasks();
@@ -1852,7 +2321,8 @@ function setupTaskViewControls() {
   taskSortModeSelect.onchange = onChange;
   if (taskFilterPrioritySelect) taskFilterPrioritySelect.onchange = onChange;
   if (taskFilterProgressSelect) taskFilterProgressSelect.onchange = onChange;
-  if (taskFilterComplexitySelect) taskFilterComplexitySelect.onchange = onChange;
+  if (taskFilterComplexitySelect)
+    taskFilterComplexitySelect.onchange = onChange;
   if (taskSort1Select) taskSort1Select.onchange = onChange;
   if (taskSort1DirSelect) taskSort1DirSelect.onchange = onChange;
   if (taskSort2Select) taskSort2Select.onchange = onChange;
@@ -1930,9 +2400,7 @@ function moveTask(taskId, toStatus, beforeTaskId = null) {
 
   const fromIds = getOrderedIds(fromStatus).filter((id) => id !== taskId);
   const toIds =
-    toStatus === fromStatus
-      ? fromIds.slice()
-      : getOrderedIds(toStatus).slice();
+    toStatus === fromStatus ? fromIds.slice() : getOrderedIds(toStatus).slice();
 
   const insertAt =
     beforeTaskId && toIds.includes(beforeTaskId)
