@@ -40,4 +40,10 @@
 
 3. Bắt đầu thêm task và quản lý cùng đội ngũ của bạn!
 
-Dự án được thực hiện bởi **AI Project Manager** .
+## 🌐 Deploy public (GitHub Pages)
+1. Push code lên GitHub (branch `main`).
+2. Vào GitHub repo → Settings → Pages → Source chọn GitHub Actions.
+3. Mỗi lần push lên `main` sẽ tự deploy. URL sẽ là `https://<github-username>.github.io/<repo>/`.
+
+---
+Dự án được thực hiện bởi **AI Project Manager**.
