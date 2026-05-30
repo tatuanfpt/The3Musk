@@ -36,6 +36,8 @@ Dự án **3Musk + One Thing** được xây dựng nhằm tối ưu hóa hiệu
 | FR-06 | Export/Import | Backup/restore dữ liệu JSON | Medium | Epic 5 |
 | FR-07 | One Thing Chat Assistant | Chatbot giúp xem task hôm nay, ưu tiên, task liên quan | High | Epic 6 |
 | FR-08 | Focus Mode | Chỉ hiển thị "One Thing" để tập trung | Medium | Epic 6 |
+| FR-09 | AI Writer Tools | Optimize title, fix grammar, summarize, rewrite tone trong form task | Medium | Backlog |
+| FR-10 | AI Knowledge Manager | Side panel Q&A dựa trên context workspace (members, tasks) | Medium | Backlog |
 
 ### 3.2. Non-functional Requirements (Yêu cầu phi chức năng)
 - **Hiệu năng:** Tải trang đầu tiên dưới 1.5 giây.
