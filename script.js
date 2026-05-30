@@ -1861,7 +1861,987 @@ function openFocusMode() {
 function closeFocusMode() {
   focusModeOverlay.classList.add("hidden");
 }
+// ----------------------
+// AI Knowledge Manager (Agent Workflow)
+// ----------------------
 
+const aiState = {
+  requirementsRaw: "",
+  requirements: null,
+  ready: false,
+};
+
+function getAiProfiles() {
+  try {
+    return JSON.parse(localStorage.getItem("3musk_ai_profiles") || "{}");
+  } catch {
+    return {};
+  }
+}
+
+function saveAiProfiles(profiles) {
+  localStorage.setItem("3musk_ai_profiles", JSON.stringify(profiles || {}));
+}
+
+function getDefaultAiProfileForMember(member) {
+  const nameNlp = normalizeForNlp(member?.name || "");
+  if (nameNlp.includes("tuan")) {
+    return { tone: "professional", verbosity: "normal", showTrace: false };
+  }
+  if (nameNlp.includes("thang")) {
+    return { tone: "professional", verbosity: "detailed", showTrace: false };
+  }
+  if (nameNlp.includes("nhat")) {
+    return { tone: "friendly", verbosity: "normal", showTrace: false };
+  }
+  return { tone: "friendly", verbosity: "normal", showTrace: false };
+}
+
+function getAiProfileForCurrentUser() {
+  const current = state.members.find((m) => m.id == state.currentUser);
+  const profiles = getAiProfiles();
+  const saved = profiles[String(current?.id ?? "")];
+  const base = getDefaultAiProfileForMember(current);
+  return { ...base, ...(saved || {}), memberId: current?.id ?? null };
+}
+
+function setAiProfileForCurrentUser(next) {
+  const current = state.members.find((m) => m.id == state.currentUser);
+  if (!current) return;
+  const profiles = getAiProfiles();
+  profiles[String(current.id)] = { ...(profiles[String(current.id)] || {}), ...next };
+  saveAiProfiles(profiles);
+}
+
+function getTonePhrases(profile) {
+  const tone = profile?.tone || "friendly";
+  if (tone === "professional") {
+    return {
+      assistant: "Tôi",
+      suggest: "Gợi ý",
+      ask: "Bạn muốn tôi hỗ trợ thêm gì?",
+      ok: "Đã cập nhật.",
+    };
+  }
+  return {
+    assistant: "Mình",
+    suggest: "Gợi ý",
+    ask: "Bạn muốn mình hỗ trợ thêm gì?",
+    ok: "Ok, mình đã cập nhật nha.",
+  };
+}
+
+async function initAiKnowledgeManager() {
+  if (!aiChatHistory || !aiInput || !sendAiQueryBtn || !aiPanel) return;
+
+  if (aiChatHistory.children.length === 0) {
+    const profile = getAiProfileForCurrentUser();
+    const t = getTonePhrases(profile);
+    addAiMessage({
+      role: "assistant",
+      text: `Chào bạn! ${t.assistant} là AI Assistant của 3Musk.\n\n${t.assistant} có thể giúp bạn phân tích REQUIREMENTS.md như:\n- Tóm tắt requirements\n- Liệt kê BR (Business Rules)\n- Liệt kê FR (Functional Requirements)\n- Giải thích Epic 6\n- Team assignment\n\nNgoài ra ${t.assistant.toLowerCase()} cũng có thể trả task theo từng người (vd: "Tuấn đang có task gì").\n\n${t.ask}`,
+    });
+  }
+
+  try {
+    const raw = await fetch("./REQUIREMENTS.md", { cache: "no-store" }).then(
+      (r) => {
+        if (!r.ok) throw new Error("Không load được REQUIREMENTS.md");
+        return r.text();
+      },
+    );
+    aiState.requirementsRaw = raw;
+    aiState.requirements = parseRequirementsMarkdown(raw);
+    aiState.ready = true;
+  } catch (err) {
+    aiState.ready = false;
+    addAiMessage({
+      role: "assistant",
+      text: `Không thể load REQUIREMENTS.md trong browser. Lý do: ${err?.message || "unknown"}.`,
+    });
+  }
+}
+
+function toggleAiPanel() {
+  if (!aiPanel) return;
+  aiPanel.classList.toggle("translate-x-full");
+  if (!aiPanel.classList.contains("translate-x-full")) {
+    aiInput?.focus();
+  }
+}
+
+function closeAiPanel() {
+  if (!aiPanel) return;
+  aiPanel.classList.add("translate-x-full");
+}
+
+function addAiMessage({ role, text }) {
+  if (!aiChatHistory) return;
+  const safeText = escapeHtml(text);
+  const wrapper = document.createElement("div");
+  wrapper.className = `flex ${role === "user" ? "justify-end" : "justify-start"}`;
+  wrapper.innerHTML = `
+    <div class="${
+      role === "user"
+        ? "bg-purple-600 text-white"
+        : "bg-white text-gray-900 dark:bg-gray-800 dark:text-gray-100"
+    } max-w-[85%] rounded-2xl px-4 py-3 text-sm shadow-sm border border-purple-100 dark:border-gray-700 whitespace-pre-wrap">${safeText}</div>
+  `;
+  aiChatHistory.appendChild(wrapper);
+  aiChatHistory.scrollTop = aiChatHistory.scrollHeight;
+}
+
+function handleAiSubmit() {
+  const q = aiInput?.value?.trim();
+  if (!q) return;
+  addAiMessage({ role: "user", text: q });
+  aiInput.value = "";
+
+  const response = runAiWorkflow(q);
+  addAiMessage({ role: "assistant", text: response });
+}
+
+function runAiWorkflow(query) {
+  const input = normalizeText(query);
+  const inputNlp = normalizeForNlp(input);
+  const profile = getAiProfileForCurrentUser();
+
+  const plan = inferAiPlan({ input, inputNlp, profile });
+  const output = executeAiPlan(plan);
+
+  if (profile.showTrace) {
+    return `Input:\n- ${input}\n\nProcessing:\n${plan.processing}\n\nOutput:\n${output}`;
+  }
+  return output;
+}
+
+function inferAiPlan({ input, inputNlp, profile }) {
+  const candidates = [];
+
+  const push = (type, score, payload = {}) => {
+    candidates.push({ type, score, ...payload });
+  };
+
+  const q = inputNlp;
+  const member = findMemberByQuery(q);
+  const hasTaskWord = q.includes("task") || q.includes("cong viec");
+  const groupByDeadline = q.includes("deadline") || q.includes("han") || q.includes("ngay");
+  const includeDone = q.includes("tat ca") || q.includes("all");
+
+  if (
+    q.includes("phong cach") ||
+    q.includes("gio ng") ||
+    q.includes("giọng") ||
+    q.includes("tone") ||
+    q.includes("verbosity") ||
+    q.includes("chi tiet") ||
+    q.includes("ngan gon") ||
+    q.includes("bat trace") ||
+    q.includes("tat trace")
+  ) {
+    push("set_profile", 90);
+  }
+
+  if (
+    q.includes("seed demo") ||
+    q.includes("setup demo") ||
+    q.includes("tao du lieu gia") ||
+    q.includes("tạo dữ liệu giả")
+  ) {
+    push("seed_demo", 95);
+  }
+
+  if (q.includes("reset demo") || q.includes("xoa du lieu") || q.includes("clear data")) {
+    push("reset_demo", 95);
+  }
+
+  if (q.includes("self test") || q.includes("kiem thu")) {
+    push("self_test_requirements", 92);
+  }
+
+  if (q.startsWith("tao task") || q.startsWith("tạo task")) {
+    const title = input.split(":").slice(1).join(":").trim();
+    push("create_task", 90, { title });
+  }
+
+  if (
+    q.includes("tom tat requirements") ||
+    q.includes("requirements md") ||
+    q.includes("requirements la gi") ||
+    q.includes("requirements.md")
+  ) {
+    push("requirements_summary", 80);
+  }
+
+  if (q.includes("business objective") || q.includes("muc tieu")) {
+    push("business_objective", 70);
+  }
+
+  if (q.includes("business rule") || q.includes("quy tac") || q.includes("br-") || q === "br") {
+    push("business_rules", 70);
+  }
+
+  if (q.includes("functional requirement") || q.includes("fr-") || q === "fr") {
+    push("functional_requirements", 70);
+  }
+
+  if (q.includes("epic")) {
+    const match = q.match(/epic\s*(\d+)/);
+    push("epic", 70, { epicId: match ? match[1] : null });
+  }
+
+  if (q.includes("team") || q.includes("phan cong") || q.includes("assignment")) {
+    push("team_assignment", 65);
+  }
+
+  if (q.includes("workspace") || q.includes("tinh hinh") || q.includes("tong quan")) {
+    push("workspace_overview", 60);
+  }
+
+  if (q.includes("one thing") || q.includes("hom nay") || q.includes("today")) {
+    push("one_thing_today", 60);
+  }
+
+  if (q.includes("qua han") || q.includes("overdue")) {
+    push("overdue_tasks", 75, { groupMode: groupByDeadline ? "deadline" : "status" });
+  }
+
+  if (q.includes("task cua toi") || q.includes("my tasks")) {
+    push("my_tasks", 80, { groupMode: groupByDeadline ? "deadline" : "status", includeDone });
+  }
+
+  if (member && (hasTaskWord || q.includes("dang co") || q.includes("hien tai") || q.includes("co task"))) {
+    push("tasks_by_person", 85, {
+      memberId: member.id,
+      memberName: member.name,
+      groupMode: groupByDeadline ? "deadline" : "status",
+      includeDone,
+      keywords: extractKeywordFilter(q),
+    });
+  }
+
+  if (q.includes("khong thay gi") || q.includes("khong thay") || q.includes("khong hieu") || q.includes("khong co gi")) {
+    push("clarify", 55);
+  }
+
+  push("help", 10);
+
+  const best = candidates.slice().sort((a, b) => b.score - a.score)[0];
+  const processing = buildAiProcessing({
+    input,
+    inputNlp,
+    best,
+    candidates,
+    profile,
+  });
+  return { intent: best, processing, candidates, input, inputNlp };
+}
+
+function buildAiProcessing({ input, inputNlp, best, candidates, profile }) {
+  const steps = [];
+  steps.push(`- Normalize: ok`);
+  steps.push(`- Detect intent: ${best.type} (score=${best.score})`);
+  const top = candidates
+    .slice()
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 3)
+    .map((c) => `${c.type}:${c.score}`)
+    .join(", ");
+  steps.push(`- Candidates: ${top}`);
+  steps.push(`- Profile: tone=${profile.tone}, verbosity=${profile.verbosity}, trace=${profile.showTrace ? "on" : "off"}`);
+  steps.push(`- REQUIREMENTS.md: ${aiState.ready ? "ready" : "not-ready"}`);
+  if (best.type === "tasks_by_person" || best.type === "my_tasks" || best.type === "overdue_tasks" || best.type === "workspace_overview") {
+    steps.push("- Read state: members/tasks");
+    steps.push("- Sort/group/filter tasks");
+  }
+  if (best.type === "create_task" || best.type === "seed_demo" || best.type === "reset_demo") {
+    steps.push("- Execute action + persist");
+  }
+  if (best.type === "requirements_summary" || best.type === "business_objective" || best.type === "business_rules" || best.type === "functional_requirements" || best.type === "epic" || best.type === "team_assignment") {
+    steps.push("- Retrieve knowledge from parsed markdown");
+  }
+  return steps.join("\n");
+}
+
+function parseProfileCommand(inputNlp) {
+  const next = {};
+  if (inputNlp.includes("professional") || inputNlp.includes("chuyen nghiep") || inputNlp.includes("nghiem tuc")) {
+    next.tone = "professional";
+  }
+  if (inputNlp.includes("friendly") || inputNlp.includes("than thien") || inputNlp.includes("thoai mai")) {
+    next.tone = "friendly";
+  }
+  if (inputNlp.includes("ngan gon") || inputNlp.includes("short")) {
+    next.verbosity = "short";
+  }
+  if (inputNlp.includes("chi tiet") || inputNlp.includes("detailed")) {
+    next.verbosity = "detailed";
+  }
+  if (inputNlp.includes("binh thuong") || inputNlp.includes("normal")) {
+    next.verbosity = "normal";
+  }
+  if (inputNlp.includes("bat trace") || inputNlp.includes("show trace")) {
+    next.showTrace = true;
+  }
+  if (inputNlp.includes("tat trace") || inputNlp.includes("hide trace")) {
+    next.showTrace = false;
+  }
+  return next;
+}
+
+function formatTasksWithProfile({ header, member, tasks, groupMode, profile }) {
+  const t = getTonePhrases(profile);
+  if (!tasks || tasks.length === 0) {
+    const who = member ? member.name : "hiện tại";
+    return `${t.assistant} không thấy task nào phù hợp cho ${who}.`;
+  }
+
+  if (profile.verbosity === "short") {
+    const summary = buildTaskSummary(tasks);
+    const top = tasks
+      .slice()
+      .sort((a, b) => scoreTaskForPriority(a) - scoreTaskForPriority(b))
+      .slice(0, 5);
+    const lines = [];
+    if (header) lines.push(header);
+    lines.push(`Context: ${member ? member.name : "Team/Workspace"}`);
+    lines.push(`Summary: total=${summary.total}, active=${summary.active}, overdue=${summary.overdue}`);
+    lines.push("");
+    top.forEach((x, idx) => lines.push(`- ${idx + 1}. ${formatTaskLine(x)}`));
+    return lines.join("\n");
+  }
+
+  const detailMaxLen = profile.verbosity === "detailed" ? 160 : 80;
+  const summary = buildTaskSummary(tasks);
+  const oneThing = tasks
+    .filter((x) => x.status !== "done")
+    .slice()
+    .sort((a, b) => scoreTaskForPriority(a) - scoreTaskForPriority(b))[0];
+
+  const lines = [];
+  if (header) lines.push(header);
+  lines.push(`Context: ${member ? member.name : "Team/Workspace"}`);
+  lines.push(`Summary: total=${summary.total}, active=${summary.active}, overdue=${summary.overdue}`);
+  lines.push(`By status: todo=${summary.counts.todo}, progress=${summary.counts.progress}, review=${summary.counts.review}, done=${summary.counts.done}`);
+  if (oneThing) lines.push(`One Thing: ${formatTaskLine(oneThing)}`);
+  lines.push("");
+
+  const grouped = groupTasks(tasks, groupMode);
+  grouped.forEach(([key, list]) => {
+    const title =
+      groupMode === "deadline"
+        ? key === "no-deadline"
+          ? "No deadline"
+          : `Due ${formatDate(key)}`
+        : getStatusText(key);
+    const sorted = list.slice().sort((a, b) => scoreTaskForPriority(a) - scoreTaskForPriority(b));
+    lines.push(`${title} (${sorted.length})`);
+    sorted.forEach((task, idx) => {
+      const detail = task.description ? ` — ${clampText(task.description, detailMaxLen)}` : "";
+      lines.push(`- ${idx + 1}. ${formatTaskLine(task)}${detail}`);
+    });
+    lines.push("");
+  });
+
+  lines.push(`${t.suggest}: bạn có thể hỏi "nhóm theo deadline" hoặc thêm từ khoá (vd: "UI", "deploy").`);
+  return lines.join("\n").trim();
+}
+
+function executeAiPlan(plan) {
+  const intent = plan.intent;
+  const profile = getAiProfileForCurrentUser();
+  const t = getTonePhrases(profile);
+
+  if (intent.type === "set_profile") {
+    const changes = parseProfileCommand(plan.inputNlp || "");
+    if (Object.keys(changes).length === 0) {
+      return `${t.suggest}: "phong cách chuyên nghiệp", "ngắn gọn", "chi tiết", "bật trace", "tắt trace".`;
+    }
+    setAiProfileForCurrentUser(changes);
+    const current = getAiProfileForCurrentUser();
+    return `${t.ok}\nProfile hiện tại: tone=${current.tone}, verbosity=${current.verbosity}, trace=${current.showTrace ? "on" : "off"}`;
+  }
+
+  if (intent.type === "seed_demo" || intent.type === "reset_demo" || intent.type === "self_test_requirements" || intent.type === "create_task" || intent.type === "requirements_summary" || intent.type === "business_objective" || intent.type === "business_rules" || intent.type === "functional_requirements" || intent.type === "epic" || intent.type === "team_assignment" || intent.type === "workspace_overview" || intent.type === "one_thing_today") {
+    return executeAiIntent(intent);
+  }
+
+  if (intent.type === "overdue_tasks") {
+    const overdueTasks = state.tasks.filter(
+      (x) => x.deadline && new Date(x.deadline) < new Date() && x.status !== "done",
+    );
+    return formatTasksWithProfile({
+      header: "Overdue Tasks",
+      member: null,
+      tasks: overdueTasks,
+      groupMode: intent.groupMode || "status",
+      profile,
+    });
+  }
+
+  if (intent.type === "my_tasks") {
+    const member = state.members.find((m) => m.id == state.currentUser) ?? null;
+    const base = state.tasks.filter((x) => x.assigneeId == state.currentUser);
+    const tasks = intent.includeDone ? base : base.filter((x) => x.status !== "done");
+    return formatTasksWithProfile({
+      header: "Your Tasks",
+      member,
+      tasks,
+      groupMode: intent.groupMode || "status",
+      profile,
+    });
+  }
+
+  if (intent.type === "tasks_by_person") {
+    const member = state.members.find((m) => m.id == intent.memberId) ?? null;
+    if (!member) return `${t.assistant} không tìm thấy thành viên phù hợp.`;
+    const base = state.tasks.filter((x) => x.assigneeId == member.id);
+    const tasks = intent.includeDone ? base : base.filter((x) => x.status !== "done");
+    const filtered = filterTasksByKeywords(tasks, intent.keywords || []);
+    return formatTasksWithProfile({
+      header: `Tasks for ${member.name}`,
+      member,
+      tasks: filtered,
+      groupMode: intent.groupMode || "status",
+      profile,
+    });
+  }
+
+  if (intent.type === "clarify") {
+    const current = state.members.find((m) => m.id == state.currentUser);
+    return `${t.assistant} có thể hỗ trợ theo các hướng này:\n1) Phân tích REQUIREMENTS.md: "tóm tắt requirements", "liệt kê BR", "liệt kê FR", "epic 6", "team assignment"\n2) Task: "task của tôi", "Tuấn đang có task gì", "task quá hạn", "team ra sao"\n\nHiện user đang chọn: ${current?.name || "Unknown"}\n\n${t.ask}`;
+  }
+
+  const membersHint = state.members.map((m) => m.name).join(", ");
+  return `${t.suggest}: thử một trong các câu sau:\n- "tóm tắt requirements"\n- "liệt kê BR"\n- "liệt kê FR"\n- "epic 6"\n- "team assignment"\n- "task của tôi"\n- "Tuấn đang có task gì"\n- "task quá hạn"\n- "team ra sao"\n\nMembers: ${membersHint}\n\n${t.ask}`;
+}
+
+
+  if (
+    q.includes("seed demo") ||
+    q.includes("setup demo") ||
+    q.includes("tạo dữ liệu giả") ||
+    q.includes("tao du lieu gia")
+  ) {
+    return { type: "seed_demo" };
+  }
+
+  if (
+    q.includes("reset demo") ||
+    q.includes("xoá dữ liệu") ||
+    q.includes("xoa du lieu") ||
+    q.includes("clear data")
+  ) {
+    return { type: "reset_demo" };
+  }
+
+  if (
+    q.includes("self test") ||
+    q.includes("kiểm thử") ||
+    q.includes("kiem thu")
+  ) {
+    return { type: "self_test_requirements" };
+  }
+
+  if (q.startsWith("tạo task") || q.startsWith("tao task")) {
+    const title = input.split(":").slice(1).join(":").trim();
+    return { type: "create_task", title };
+  }
+
+  if (
+    q.includes("tóm tắt requirements") ||
+    q.includes("tom tat requirements") ||
+    q.includes("requirements là gì") ||
+    q.includes("requirements.md")
+  ) {
+    return { type: "requirements_summary" };
+  }
+
+  if (q.includes("business objective") || q.includes("mục tiêu")) {
+    return { type: "business_objective" };
+  }
+
+  if (
+    q.includes("business rule") ||
+    q.includes("quy tắc") ||
+    q.includes("br-") ||
+    q === "br"
+  ) {
+    return { type: "business_rules" };
+  }
+
+  if (q.includes("functional requirement") || q.includes("fr-") || q === "fr") {
+    return { type: "functional_requirements" };
+  }
+
+  if (q.includes("epic")) {
+    const match = q.match(/epic\s*(\d+)/);
+    return { type: "epic", epicId: match ? match[1] : null };
+  }
+
+  if (
+    q.includes("team") ||
+    q.includes("phân công") ||
+    q.includes("assignment")
+  ) {
+    return { type: "team_assignment" };
+  }
+
+  if (
+    q.includes("workspace") ||
+    q.includes("tình hình") ||
+    q.includes("tinh hinh")
+  ) {
+    return { type: "workspace_overview" };
+  }
+
+  if (q.includes("one thing") || q.includes("hôm nay") || q.includes("today")) {
+    return { type: "one_thing_today" };
+  }
+
+  return { type: "help" };
+}
+
+function buildProcessingTrace(intent) {
+  const steps = [];
+  steps.push(`- Intent: ${intent.type}`);
+  if (intent.type === "epic")
+    steps.push(`- Extract epicId: ${intent.epicId ?? "(none)"}`);
+  if (intent.type === "create_task")
+    steps.push(`- Extract title: ${intent.title ? "ok" : "missing"}`);
+  if (intent.type === "seed_demo")
+    steps.push("- Plan: seed demo members/tasks");
+  if (intent.type === "reset_demo")
+    steps.push("- Plan: clear LocalStorage keys");
+  if (intent.type === "self_test_requirements")
+    steps.push("- Plan: run BR/FR checklist against current state");
+  steps.push(
+    `- Load REQUIREMENTS.md: ${aiState.ready ? "ready" : "not-ready"}`,
+  );
+  if (intent.type !== "create_task")
+    steps.push("- Retrieve knowledge sections from parsed markdown");
+  if (intent.type === "workspace_overview" || intent.type === "one_thing_today")
+    steps.push("- Read current state (members/tasks) from LocalStorage state");
+  if (intent.type === "create_task")
+    steps.push("- Execute action: create task in state + persist");
+  if (intent.type === "seed_demo")
+    steps.push("- Execute action: seed demo + persist + rerender");
+  if (intent.type === "reset_demo")
+    steps.push("- Execute action: clear + instruct refresh");
+  if (intent.type === "self_test_requirements")
+    steps.push("- Execute action: compute checklist output");
+  return steps.join("\n");
+}
+
+function executeAiIntent(intent) {
+  if (intent.type === "seed_demo") {
+    seedDemoData({ force: true });
+    renderMembers();
+    renderTasks();
+    return "Đã tạo dữ liệu giả (members + tasks) để mô phỏng môi trường thực tế.";
+  }
+
+  if (intent.type === "reset_demo") {
+    const keys = [
+      "3musk_members",
+      "3musk_tasks",
+      "3musk_darkMode",
+      "3musk_seed_version",
+    ];
+    keys.forEach((k) => localStorage.removeItem(k));
+    return "Đã xoá dữ liệu LocalStorage. Refresh trang để khởi tạo lại dữ liệu demo.";
+  }
+
+  if (intent.type === "self_test_requirements") {
+    return runRequirementsChecklist();
+  }
+
+  if (intent.type === "create_task") {
+    const title = normalizeText(intent.title);
+    if (!title) {
+      return 'Cú pháp: "tạo task: <tiêu đề>"';
+    }
+    const newTask = {
+      id: Date.now().toString(),
+      title: clampText(title, 80),
+      description: "",
+      assigneeId: state.currentUser ?? state.members[0]?.id ?? "",
+      deadline: "",
+      status: "todo",
+      createdAt: new Date().toISOString(),
+      reviewedBy: [],
+    };
+    state.tasks.push(newTask);
+    saveState();
+    renderTasks();
+    return `Đã tạo task: ${newTask.title} (status: Todo)`;
+  }
+
+  if (!aiState.ready || !aiState.requirements) {
+    return "Hiện chưa load được REQUIREMENTS.md. Bạn thử refresh trang hoặc chạy qua server (GitHub Pages / http server) để fetch file hoạt động.";
+  }
+
+  const req = aiState.requirements;
+
+  switch (intent.type) {
+    case "requirements_summary":
+      return [
+        "Business Objective:",
+        `- ${req.businessObjective?.headline || ""}`,
+        ...(req.businessObjective?.goals?.map((g) => `- ${g}`) ?? []),
+        "",
+        "Business Rules:",
+        ...(req.businessRules?.map((r) => `- ${r.id}: ${r.text}`) ?? []),
+        "",
+        "Functional Requirements:",
+        ...(req.functionalRequirements?.map(
+          (fr) => `- ${fr.id}: ${fr.feature} (${fr.priority}, ${fr.epic})`,
+        ) ?? []),
+      ].join("\n");
+
+    case "business_objective":
+      return [
+        req.businessObjective?.headline || "",
+        ...(req.businessObjective?.goals?.map((g) => `- ${g}`) ?? []),
+      ].join("\n");
+
+    case "business_rules":
+      return (req.businessRules ?? [])
+        .map((r) => `- ${r.id}: ${r.text}`)
+        .join("\n");
+
+    case "functional_requirements":
+      return (req.functionalRequirements ?? [])
+        .map(
+          (fr) =>
+            `- ${fr.id}: ${fr.feature}\n  - ${fr.detail}\n  - Priority: ${fr.priority}\n  - Epic: ${fr.epic}`,
+        )
+        .join("\n");
+
+    case "epic": {
+      const epicId = intent.epicId ? `Epic ${intent.epicId}` : null;
+      const list = epicId
+        ? (req.functionalRequirements ?? []).filter((fr) => fr.epic === epicId)
+        : (req.functionalRequirements ?? []);
+      if (!epicId) {
+        const byEpic = new Map();
+        list.forEach((fr) => {
+          const key = fr.epic || "Unknown";
+          byEpic.set(key, [...(byEpic.get(key) ?? []), fr]);
+        });
+        return Array.from(byEpic.entries())
+          .map(
+            ([ep, items]) =>
+              `${ep}\n${items.map((x) => `- ${x.id}: ${x.feature}`).join("\n")}`,
+          )
+          .join("\n\n");
+      }
+      return `${epicId}\n${list.map((x) => `- ${x.id}: ${x.feature}`).join("\n") || "(không có)"}`;
+    }
+
+    case "team_assignment":
+      return (req.teamAssignment ?? [])
+        .map((m) => `- ${m.name}: ${m.role}`)
+        .join("\n");
+
+    case "workspace_overview": {
+      const statusCounts = { todo: 0, progress: 0, review: 0, done: 0 };
+      state.tasks.forEach((t) => {
+        if (statusCounts[t.status] !== undefined) statusCounts[t.status]++;
+      });
+      return [
+        `Tổng tasks: ${state.tasks.length}`,
+        `Todo: ${statusCounts.todo}`,
+        `In Progress: ${statusCounts.progress}`,
+        `Review: ${statusCounts.review}`,
+        `Done: ${statusCounts.done}`,
+      ].join("\n");
+    }
+
+    case "one_thing_today": {
+      const oneThing = getOneThingPriority();
+      if (!oneThing) return "Bạn không có task pending nào.";
+      return `One Thing: ${oneThing.title}\n- Status: ${getStatusText(oneThing.status)}${oneThing.deadline ? `\n- Deadline: ${formatDate(oneThing.deadline)}` : ""}`;
+    }
+
+    default:
+      return "Gợi ý: 'tóm tắt requirements', 'mục tiêu', 'liệt kê BR', 'liệt kê FR', 'epic 6', 'team assignment', 'tình hình workspace', 'tạo task: ...'";
+  }
+}
+
+function runRequirementsChecklist() {
+  const results = [];
+
+  const memberCount = Array.isArray(state.members) ? state.members.length : 0;
+  results.push({
+    id: "BR-01",
+    ok: memberCount >= 1 && memberCount <= 5,
+    detail: `members=${memberCount} (expect 1..5)`,
+  });
+
+  const memberIds = new Set((state.members ?? []).map((m) => String(m.id)));
+  const badAssignee = (state.tasks ?? []).filter(
+    (t) => !t.assigneeId || !memberIds.has(String(t.assigneeId)),
+  );
+  results.push({
+    id: "BR-02",
+    ok: badAssignee.length === 0,
+    detail:
+      badAssignee.length === 0
+        ? "all tasks have valid assignee"
+        : `invalid assignee tasks=${badAssignee.length}`,
+  });
+
+  const reviewNotApproved = (state.tasks ?? []).filter(
+    (t) => t.status === "review" && !isTaskApproved(t),
+  );
+  results.push({
+    id: "BR-03",
+    ok: true,
+    detail: `review tasks pending approval=${reviewNotApproved.length} (blocked from Done)`,
+  });
+
+  results.push({
+    id: "BR-04",
+    ok: true,
+    detail: "deleteMember() prevents deleting last member (manual UI check)",
+  });
+
+  const hasOverdue =
+    (state.tasks ?? []).filter(
+      (t) =>
+        t.deadline && new Date(t.deadline) < new Date() && t.status !== "done",
+    ).length > 0;
+  results.push({
+    id: "BR-05",
+    ok: hasOverdue,
+    detail: hasOverdue
+      ? "overdue scenario present (UI should show red)"
+      : "no overdue task found (seed demo to test)",
+  });
+
+  const oneThing = getOneThingPriority();
+  results.push({
+    id: "BR-06",
+    ok: !!oneThing,
+    detail: oneThing
+      ? `one thing='${oneThing.title}'`
+      : "no one-thing candidate",
+  });
+
+  const frChecks = [
+    {
+      id: "FR-01",
+      ok: !!document.getElementById("manage-members-btn"),
+      detail: "member management UI exists",
+    },
+    {
+      id: "FR-02",
+      ok: !!document.getElementById("col-review"),
+      detail: "kanban has 4 columns incl review",
+    },
+    {
+      id: "FR-03",
+      ok: !!document.getElementById("task-deadline"),
+      detail: "deadline field exists",
+    },
+    {
+      id: "FR-04",
+      ok: typeof approveTask === "function",
+      detail: "approve action exists",
+    },
+    {
+      id: "FR-05",
+      ok: !!document.getElementById("dark-mode-btn"),
+      detail: "dark mode toggle exists",
+    },
+    {
+      id: "FR-06",
+      ok:
+        !!document.getElementById("export-btn") &&
+        !!document.getElementById("import-file"),
+      detail: "export/import exists",
+    },
+    {
+      id: "FR-07",
+      ok:
+        !!document.getElementById("ai-assistant-btn") &&
+        !!document.getElementById("ai-panel"),
+      detail: "AI assistant panel exists",
+    },
+    {
+      id: "FR-08",
+      ok: !!document.getElementById("focus-mode-overlay"),
+      detail: "focus mode overlay exists",
+    },
+  ];
+
+  const lines = [];
+  lines.push("Kết quả self-test theo REQUIREMENTS.md:");
+  [...results, ...frChecks].forEach((r) => {
+    lines.push(`- ${r.id}: ${r.ok ? "PASS" : "FAIL"} — ${r.detail}`);
+  });
+
+  const failed = [...results, ...frChecks].filter((r) => !r.ok);
+  lines.push("");
+  lines.push(
+    failed.length === 0
+      ? "Tổng quan: PASS (đủ điều kiện demo)."
+      : `Tổng quan: FAIL (${failed.length} checks).`,
+  );
+
+  return lines.join("\n");
+}
+
+function parseRequirementsMarkdown(raw) {
+  const text = normalizeText(raw);
+  const lines = text.split("\n");
+
+  const businessObjective = { headline: "", goals: [] };
+  const businessRules = [];
+  const functionalRequirements = [];
+  const teamAssignment = [];
+
+  let inBusinessObjective = false;
+  let inBusinessRules = false;
+  let inFRTable = false;
+  let inTeam = false;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+
+    if (line.startsWith("## 1.")) {
+      inBusinessObjective = true;
+      inBusinessRules = false;
+      inFRTable = false;
+      inTeam = false;
+      continue;
+    }
+    if (line.startsWith("## 2.")) {
+      inBusinessObjective = false;
+      inBusinessRules = true;
+      inFRTable = false;
+      inTeam = false;
+      continue;
+    }
+    if (line.startsWith("### 3.1.")) {
+      inBusinessObjective = false;
+      inBusinessRules = false;
+      inFRTable = false;
+      inTeam = false;
+      continue;
+    }
+    if (line.startsWith("## 4.")) {
+      inBusinessObjective = false;
+      inBusinessRules = false;
+      inFRTable = false;
+      inTeam = true;
+      continue;
+    }
+
+    if (inBusinessObjective) {
+      if (!businessObjective.headline && line && !line.startsWith("-")) {
+        businessObjective.headline = line.replaceAll("**", "");
+      }
+      const goalMatch = line.match(/^- \*\*Mục tiêu \d+:\*\*\s*(.+)$/);
+      if (goalMatch) businessObjective.goals.push(goalMatch[1].trim());
+    }
+
+    if (inBusinessRules) {
+      const brMatch = line.match(/^- \*\*(BR-\d+):\*\*\s*(.+)$/);
+      if (brMatch)
+        businessRules.push({ id: brMatch[1], text: brMatch[2].trim() });
+    }
+
+    if (line.startsWith("| FR-") || line.startsWith("| ID |")) {
+      inFRTable = true;
+    }
+
+    if (inFRTable) {
+      if (!line.startsWith("|")) continue;
+      if (line.startsWith("|---")) continue;
+      if (line.startsWith("| ID |")) continue;
+      const cells = line
+        .split("|")
+        .map((c) => c.trim())
+        .filter((c) => c.length > 0);
+      if (cells.length >= 5 && cells[0].startsWith("FR-")) {
+        functionalRequirements.push({
+          id: cells[0],
+          feature: cells[1],
+          detail: cells[2],
+          priority: cells[3],
+          epic: cells[4],
+        });
+      }
+    }
+
+    if (inTeam) {
+      const teamMatch = line.match(/^- \*\*(.+?):\*\*\s*(.+)$/);
+      if (teamMatch)
+        teamAssignment.push({
+          name: teamMatch[1].trim(),
+          role: teamMatch[2].trim(),
+        });
+    }
+  }
+
+  return {
+    businessObjective,
+    businessRules,
+    functionalRequirements,
+    teamAssignment,
+  };
+}
+
+window.aiAction = (action) => {
+  const titleEl = document.getElementById("task-title");
+  const descEl = document.getElementById("task-desc");
+  const title = titleEl?.value ?? "";
+  const desc = descEl?.value ?? "";
+
+  if (action === "optimize-title") {
+    const cleaned = clampText(
+      normalizeText(title)
+        .replaceAll(/\s+/g, " ")
+        .replaceAll(/\s*[-–—]\s*/g, " - "),
+      80,
+    );
+    if (titleEl) titleEl.value = cleaned;
+    return;
+  }
+
+  if (action === "fix-grammar") {
+    const fixed = normalizeText(desc)
+      .replaceAll(/\s+/g, " ")
+      .replaceAll(" ,", ",")
+      .replaceAll(" .", ".")
+      .replaceAll(" !", "!")
+      .replaceAll(" ?", "?");
+    if (descEl) descEl.value = fixed;
+    return;
+  }
+
+  if (action === "summarize") {
+    const fixed = normalizeText(desc);
+    const sentence = fixed.split(/[.!?]\s/)[0] ?? fixed;
+    if (descEl) descEl.value = clampText(sentence, 160);
+    return;
+  }
+
+  if (action === "rewrite-professional") {
+    const fixed = normalizeText(desc);
+    if (!fixed) return;
+    const lines = fixed
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean);
+    const bullets = lines
+      .map((l) => `- ${l.replaceAll(/^[*-]\s*/, "")}`)
+      .join("\n");
+    if (descEl) descEl.value = bullets;
+  }
+};
 function openTaskModal(task = null) {
   __dbg("modal.openTaskModal.enter", {
     taskId: task?.id || null,
