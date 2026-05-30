@@ -35,7 +35,7 @@ let taskView = JSON.parse(localStorage.getItem("3musk_taskView")) || {
   keyword: "",
   filters: { priority: "all", progress: "all", complexity: "all" },
   sort: [
-    { field: "priority", dir: "desc" },
+    { field: "score", dir: "desc" },
     { field: "none", dir: "desc" },
     { field: "none", dir: "desc" },
   ],
@@ -536,7 +536,9 @@ function renderTasks() {
 
   const compareByField = (a, b, field, dir) => {
     let delta = 0;
-    if (field === "priority") {
+    if (field === "score") {
+      delta = computeTaskScore(a) - computeTaskScore(b);
+    } else if (field === "priority") {
       delta = (priorityRank[a.priority] ?? 1) - (priorityRank[b.priority] ?? 1);
     } else if (field === "progress") {
       delta =
@@ -603,6 +605,7 @@ function renderTasks() {
         </div>
       </div>
       <div class="flex flex-wrap gap-1 mb-2">
+        <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-200">Điểm: ${computeTaskScore(task)}</span>
         <span class="text-[10px] font-bold px-2 py-0.5 rounded ${getPriorityBadgeClass(task.priority)}">Ưu tiên: ${getPriorityText(task.priority)}</span>
         <span class="text-[10px] font-bold px-2 py-0.5 rounded ${getProgressBadgeClass(task.progressState)}">Tiến độ: ${getProgressText(task.progressState)}</span>
         <span class="text-[10px] font-bold px-2 py-0.5 rounded ${getComplexityBadgeClass(task.complexity)}">Phức tạp: ${getComplexityText(task.complexity)}</span>
@@ -846,11 +849,13 @@ function submitReviewDecision(decision) {
 
   if (decision === "approved") {
     task.reviewedBy = [state.currentUser];
+    task.progressState = "done";
     moveTask(task.id, "done");
     return;
   }
 
   task.reviewedBy = [];
+  task.progressState = "in_progress";
   moveTask(task.id, "progress");
 }
 
@@ -1573,19 +1578,11 @@ window.updateTaskStatus = (taskId, direction) => {
   const currentIndex = statuses.indexOf(task.status);
 
   if (direction === "next") {
-    // Check if trying to move from review to done without approval
-    if (
-      task.status === "review" &&
-      (!task.reviewedBy || task.reviewedBy.length === 0)
-    ) {
-      alert("Task cần được review trước khi hoàn thành!");
-      return;
-    }
     if (currentIndex < statuses.length - 1) {
-      task.status = statuses[currentIndex + 1];
+      moveTask(task.id, statuses[currentIndex + 1]);
     }
   } else if (direction === "prev" && currentIndex > 0) {
-    task.status = statuses[currentIndex - 1];
+    moveTask(task.id, statuses[currentIndex - 1]);
   }
 
   renderTasks();
@@ -1633,6 +1630,7 @@ window.selectUser = (userId) => {
 const priorityRank = { low: 0, medium: 1, high: 2 };
 const progressRank = { not_started: 0, in_progress: 1, in_review: 2, done: 3 };
 const complexityRank = { easy: 0, medium: 1, hard: 2, very_hard: 3 };
+const scoreWeights = { priority: 3, complexity: 2, progress: 1, deadline: 1 };
 
 function statusToProgressState(status) {
   switch (status) {
@@ -1707,6 +1705,32 @@ function getComplexityText(complexity) {
   }
 }
 
+function computeDeadlineUrgency(deadline) {
+  if (!deadline) return 0;
+  const dayMs = 24 * 60 * 60 * 1000;
+  const now = new Date();
+  const due = new Date(deadline);
+  if (Number.isNaN(due.getTime())) return 0;
+  const daysLeft = Math.floor((due.getTime() - now.getTime()) / dayMs);
+  if (daysLeft < 0) return 3;
+  if (daysLeft <= 1) return 2;
+  if (daysLeft <= 3) return 1;
+  return 0;
+}
+
+function computeTaskScore(task) {
+  const p = priorityRank[task.priority] ?? 1;
+  const c = complexityRank[task.complexity] ?? 1;
+  const pr = progressRank[task.progressState] ?? 1;
+  const d = computeDeadlineUrgency(task.deadline);
+  return (
+    p * scoreWeights.priority +
+    c * scoreWeights.complexity +
+    pr * scoreWeights.progress +
+    d * scoreWeights.deadline
+  );
+}
+
 function getPriorityBadgeClass(priority) {
   switch (priority) {
     case "high":
@@ -1777,8 +1801,17 @@ function ensureTaskFields() {
 function updateTaskStatusFromProgress(task) {
   const nextStatus = progressStateToStatus(task.progressState);
   if (task.status !== nextStatus) {
-    task.status = nextStatus;
-    task.order = getNextOrder(nextStatus);
+    let safeStatus = nextStatus;
+    if (
+      safeStatus === "done" &&
+      (!task.reviewedBy || task.reviewedBy.length === 0) &&
+      task.reviewStatus !== "approved"
+    ) {
+      safeStatus = "review";
+      task.progressState = "in_review";
+    }
+    task.status = safeStatus;
+    task.order = getNextOrder(safeStatus);
   }
 }
 
@@ -1794,7 +1827,7 @@ function setupTaskViewControls() {
   if (taskFilterComplexitySelect)
     taskFilterComplexitySelect.value = taskView.filters.complexity;
 
-  if (taskSort1Select) taskSort1Select.value = taskView.sort[0]?.field || "priority";
+  if (taskSort1Select) taskSort1Select.value = taskView.sort[0]?.field || "score";
   if (taskSort1DirSelect) taskSort1DirSelect.value = taskView.sort[0]?.dir || "desc";
   if (taskSort2Select) taskSort2Select.value = taskView.sort[1]?.field || "none";
   if (taskSort2DirSelect) taskSort2DirSelect.value = taskView.sort[1]?.dir || "desc";
@@ -1808,7 +1841,7 @@ function setupTaskViewControls() {
     taskView.filters.progress = taskFilterProgressSelect?.value || "all";
     taskView.filters.complexity = taskFilterComplexitySelect?.value || "all";
     taskView.sort = [
-      { field: taskSort1Select?.value || "priority", dir: taskSort1DirSelect?.value || "desc" },
+      { field: taskSort1Select?.value || "score", dir: taskSort1DirSelect?.value || "desc" },
       { field: taskSort2Select?.value || "none", dir: taskSort2DirSelect?.value || "desc" },
       { field: taskSort3Select?.value || "none", dir: taskSort3DirSelect?.value || "desc" },
     ];
@@ -1991,6 +2024,7 @@ function openTaskDetailModal(taskId) {
 
   if (metaEl) {
     metaEl.innerHTML = `
+      <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-200">Điểm: ${computeTaskScore(task)}</span>
       <span class="text-[10px] font-bold px-2 py-0.5 rounded ${getPriorityBadgeClass(task.priority)}">Ưu tiên: ${getPriorityText(task.priority)}</span>
       <span class="text-[10px] font-bold px-2 py-0.5 rounded ${getProgressBadgeClass(task.progressState)}">Tiến độ: ${getProgressText(task.progressState)}</span>
       <span class="text-[10px] font-bold px-2 py-0.5 rounded ${getComplexityBadgeClass(task.complexity)}">Phức tạp: ${getComplexityText(task.complexity)}</span>
