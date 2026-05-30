@@ -1069,10 +1069,6 @@ window.aiAction = async (type) => {
     if (type === "optimize-title") titleInput.value = out.split("\n")[0];
     else descInput.value = out;
   } catch (e) {
-    geminiAvailable = false;
-    state.aiEnabled = false;
-    saveState();
-    renderAiToggle();
     const out = runLocalAiWriter(type, content);
     if (type === "optimize-title") titleInput.value = out;
     else descInput.value = out;
@@ -1122,6 +1118,7 @@ function renderAiToggle() {
 
 function toggleAiEnabled() {
   state.aiEnabled = !state.aiEnabled;
+  if (state.aiEnabled) geminiAvailable = true;
   saveState();
   renderAiToggle();
   appendAiMessage(
@@ -1271,10 +1268,18 @@ function handleUnifiedAiChat() {
       appendAiMessage("ai", text || localResponse);
     } catch (e) {
       geminiAvailable = false;
-      state.aiEnabled = false;
-      saveState();
-      renderAiToggle();
+      const msg = String(e && e.message ? e.message : "");
       appendAiMessage("ai", localResponse);
+      if (
+        msg.includes("gemini_http_404") ||
+        msg.includes("gemini_http_501") ||
+        msg.includes("gemini_http_502")
+      ) {
+        appendAiMessage(
+          "ai",
+          "Gemini hiện chưa gọi được vì thiếu API server (/api/gemini). Nếu chạy local: start server.py với GOOGLE_API_KEY, rồi mở app từ server đó.",
+        );
+      }
     }
   }, 200);
 }
@@ -1518,6 +1523,7 @@ function extractKeywordFilter(queryNlp) {
     "cua",
     "toi",
     "minh",
+    "la",
     "hien",
     "tai",
     "dang",
