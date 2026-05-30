@@ -1,61 +1,45 @@
-# Implementation Plan: The 3 Musketeers (3Musk)
+# Implementation Plan: The 3 Musketeers (3Musk + One Thing AI Assistant)
+
+---
 
 ## 1) Brief
-- **Mục tiêu:** Xây dựng ứng dụng quản lý task tối giản dành riêng cho nhóm 3 người, giúp tối ưu hóa sự phối hợp và minh bạch công việc.
+- **Mục tiêu:** Xây dựng ứng dụng quản lý task tối giản dành riêng cho nhóm nhỏ, với trợ lý AI "One Thing" giúp tập trung vào task ưu tiên nhất mỗi ngày.
 - **Phạm vi (In-scope):**
-  - Giao diện Kanban Board cơ bản.
-  - Quản lý danh sách 3 thành viên.
-  - CRUD task (tạo, đọc, sửa, xóa).
-  - Trạng thái Review bắt buộc từ thành viên khác.
+  - Giao diện Kanban Board 4 cột (Todo, Progress, Review, Done)
+  - Quản lý thành viên
+  - CRUD task với deadline
+  - Quy trình Review & Approval bắt buộc
+  - Dark/Light mode
+  - Export/Import JSON
+  - One Thing AI Chat Assistant
+  - Focus Mode
 - **Ngoài phạm vi (Out-of-scope):**
-  - Hệ thống chat realtime.
-  - Quản lý nhiều workspace/nhóm khác nhau.
-  - Tích hợp bên thứ ba (Slack, Google Calendar).
+  - Hệ thống chat realtime
+  - Quản lý nhiều workspace
+  - Tích hợp bên thứ ba
 - **Định nghĩa hoàn thành (DoD):**
-  - [ ] Project khởi tạo thành công với Next.js và Tailwind.
-  - [ ] Giao diện hiển thị đúng 3 cột trạng thái (Todo, In Progress, Done).
-  - [ ] Có thể thêm task mới và gán cho 1 trong 3 Musketeers.
-  - [ ] Task có thể kéo thả hoặc chuyển đổi trạng thái thủ công.
-  - [ ] Dữ liệu được lưu trữ bền vững (LocalStorage).
-  - [ ] Responsive tốt trên cả Mobile và Desktop.
-  - [ ] Code được push lên GitHub repository thành công.
+  - Project chạy được với HTML/CSS/JS
+  - Responsive tốt trên mobile/desktop
+  - Dữ liệu lưu LocalStorage
+  - All Epic & User Stories hoàn thành
+  - Code merged vào main
+  - Deploy lên GitHub Pages
 
-## 2) Clarifying questions (Cần hỏi sếp)
-1. Bạn muốn sử dụng cơ sở dữ liệu thực (như Supabase/Firebase) ngay từ đầu hay dùng LocalStorage cho bản demo này? (Ưu tiên 1)
-2. Có cần hệ thống đăng nhập (Authentication) không, hay chỉ cần nhập tên 3 thành viên là bắt đầu được luôn? (Ưu tiên 2)
-3. Bạn có yêu cầu cụ thể nào về màu sắc thương hiệu cho "3Musk" không?
-4. Task Review có cần cơ chế "Approve" bằng nút bấm chính thức không?
+---
 
-## 3) Generate Subtasks (WBS)
-| Nhóm pha | Tên subtask | Mô tả | Deliverable | Owner | Estimate | Dependency |
-|:---|:---|:---|:---|:---|:---|:---|
-| **Chuẩn bị** | Khởi tạo Project | Setup Next.js, Tailwind, Lucide | Repo structure | Dev | S | None |
-| **Thực hiện** | Build UI Layout | Tạo khung Dashboard và 3 cột Kanban | UI Components | Dev | M | Init |
-| **Thực hiện** | Logic Quản lý Task | Implement CRUD task với LocalStorage | Task Service | Dev | M | Layout |
-| **Thực hiện** | Member Management | UI/Logic quản lý 3 thành viên | Member Module | Dev | S | Init |
-| **Thực hiện** | AI Knowledge Manager | Hệ thống Q&A dựa trên context | AI Chat Bot | Dev | L | Task Logic |
-| **Thực hiện** | AI Writer Tools | Tích hợp Rewrite/Summarize vào Task | AI Features | Dev | M | Task Logic |
-| **Kiểm tra** | Unit Test Logic | Kiểm tra các quy tắc nghiệp vụ (BR) | Test Report | QA/Dev | S | Logic |
-| **Bàn giao** | Push to GitHub | Đẩy code và tài liệu lên repo | GitHub Repo | Dev | S | All |
+## 2) Team & Task Assignment
+- **Tuấn:** Code Owner (Merge, Check code), Epic 3 (Review), Epic 4 (UX), Epic 5 (Backup)
+- **Thắng:** Epic 1 (Member Management), Epic 2 (Task & Kanban)
+- **Nhật:** Epic 6 (One Thing AI Assistant)
 
-## 4) Priority & Risks
-- **Ưu tiên:**
-  - Impact: 5/5 (Core functionality)
-  - Urgency: 4/5 (Cần demo sớm)
-  - Dependency: 5/5 (Nền tảng cho các tính năng sau)
-- **Top 3 rủi ro & Cách giảm thiểu:**
-  1. **Dữ liệu bị mất:** Sử dụng LocalStorage có rủi ro mất khi xóa cache -> Giải pháp: Thêm nút Export/Import JSON.
-  2. **UI phức tạp quá mức:** Gây khó khăn cho nhóm nhỏ -> Giải pháp: Tuân thủ phong cách Minimalist.
-  3. **Lỗi logic Review:** Task kẹt ở trạng thái Review -> Giải pháp: Cho phép Admin/Creator ghi đè (override).
+---
 
-## 5) Timeline đề xuất
-- **Ngày 1:** Setup & UI Layout. (Milestone: UI Demo ready)
-- **Ngày 2:** Core Logic & Task Management. (Milestone: Functional MVP)
-- **Ngày 3:** Testing, Refinement & Handover. (Milestone: Push to GitHub)
+## 3) Timeline đề xuất
+- **Ngày 1:** Thắng làm Epic 1, Nhật làm Epic 6, Tuấn chuẩn bị
+- **Ngày 2:** Thắng làm Epic 2, Tuấn làm Epic 3, 4, 5, Nhật tiếp tục Epic 6
+- **Ngày 3:** Tuấn merge code, test final, deploy
 
-## 6) Status update / standup mẫu
-- **Done:** Đã xác định yêu cầu dự án và khởi tạo file REQUIREMENTS.md.
-- **In progress:** Đang thiết lập cấu trúc project Next.js và build Layout Dashboard.
-- **Next:** Thực hiện logic CRUD task và lưu trữ LocalStorage.
-- **Blockers:** Chờ xác nhận về việc có dùng Auth hay không.
-- **ETA:** 2 ngày tới.
+---
+
+## 4) Chi tiết Task Breakdown
+Xem file **TASK_BREAKDOWN.md** để xem danh sách task cụ thể cho mỗi người!

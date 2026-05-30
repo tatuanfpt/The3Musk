@@ -5,10 +5,15 @@
 **3Musk** là một ứng dụng quản lý công việc tối giản, được thiết kế chuyên biệt cho các nhóm nhỏ gồm 3 thành viên (The Three Musketeers). Ứng dụng giúp tập trung vào việc hoàn thành mục tiêu chung thông qua giao diện Kanban tinh gọn.
 
 ## 🚀 Tính năng chính
-- **Kanban Board:** Quản lý trạng thái công việc (Cần làm, Đang làm, Hoàn thành).
+- **Kanban Board:** Quản lý trạng thái công việc (Todo, In Progress, Review, Done).
 - **Member Focus:** Gán việc trực tiếp cho Athos, Porthos hoặc Aramis.
 - **Persistence:** Lưu trữ dữ liệu trực tiếp trên trình duyệt (LocalStorage).
 - **Responsive:** Hoạt động mượt mà trên mọi thiết bị.
+- **Review & Approval:** Chỉ thành viên không phải assignee mới có thể approve task.
+- **Dark/Light mode:** Chuyển đổi giao diện sáng/tối.
+- **Export/Import:** Backup/restore dữ liệu JSON.
+- **One Thing Assistant:** Gợi ý task ưu tiên nhất trong ngày + Focus Mode.
+- **AI Writer & Knowledge:** Optimize title, fix grammar, summarize, rewrite; hỏi đáp theo context workspace.
 
 ## 🛠 Công nghệ sử dụng
 - **HTML5 & CSS3** (Tailwind CSS CDN)

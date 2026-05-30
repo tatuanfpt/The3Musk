@@ -1,156 +1,470 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="vi">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>3Musk - All for one, One for all</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://cdn.jsdelivr.net/npm/lucide-static@0.321.0/font/lucide.min.css" rel="stylesheet">
+    <link
+      href="https://cdn.jsdelivr.net/npm/lucide-static@0.321.0/font/lucide.min.css"
+      rel="stylesheet"
+    />
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-        body { font-family: 'Inter', sans-serif; }
-        .kanban-column { min-height: 70vh; }
+      @import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap");
+      body {
+        font-family: "Inter", sans-serif;
+      }
+      .kanban-column {
+        min-height: 70vh;
+      }
+      .dark {
+        color-scheme: dark;
+      }
     </style>
-</head>
-<body class="bg-gray-50 text-gray-900">
+  </head>
+  <body class="bg-gray-50 text-gray-900 transition-colors duration-300">
     <!-- Navigation -->
-    <nav class="bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center sticky top-0 z-10">
-        <div class="flex items-center gap-2">
-            <div class="bg-indigo-600 p-2 rounded-lg text-white">
-                <i class="lucide-shield-check"></i>
-            </div>
-            <h1 class="text-xl font-bold tracking-tight">3Musk <span class="text-indigo-600 text-sm font-medium">Dashboard</span></h1>
+    <nav
+      class="bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center sticky top-0 z-10 transition-colors duration-300"
+      id="navbar"
+    >
+      <div class="flex items-center gap-2">
+        <div class="bg-indigo-600 p-2 rounded-lg text-white">
+          <i class="lucide-shield-check"></i>
         </div>
-        <div class="flex items-center gap-4">
-            <div id="member-badges" class="flex -space-x-2">
-                <!-- Members will be injected here -->
-            </div>
-            <button id="ai-assistant-btn" class="bg-purple-100 text-purple-700 hover:bg-purple-200 px-4 py-2 rounded-lg text-sm font-semibold transition-colors flex items-center gap-2">
-                <i class="lucide-sparkles text-sm"></i> AI Assistant
-            </button>
-            <button id="add-task-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-colors flex items-center gap-2">
-                <i class="lucide-plus text-sm"></i> Thêm Task
-            </button>
+        <h1 class="text-xl font-bold tracking-tight">
+          3Musk
+          <span class="text-indigo-600 text-sm font-medium">Dashboard</span>
+        </h1>
+      </div>
+      <div class="flex items-center gap-4">
+        <div id="member-badges" class="flex -space-x-2">
+          <!-- Members will be injected here -->
         </div>
+        <button
+          id="dark-mode-btn"
+          class="p-2 rounded-lg hover:bg-gray-100 transition-colors"
+          title="Toggle Dark Mode"
+        >
+          <i class="lucide-sun"></i>
+        </button>
+        <button
+          id="export-btn"
+          class="p-2 rounded-lg hover:bg-gray-100 transition-colors"
+          title="Export Data"
+        >
+          <i class="lucide-download"></i>
+        </button>
+        <label
+          id="import-btn"
+          class="p-2 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer"
+          title="Import Data"
+        >
+          <i class="lucide-upload"></i>
+          <input type="file" id="import-file" accept=".json" class="hidden" />
+        </label>
+        <button
+          id="one-thing-btn"
+          class="bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-colors flex items-center gap-2"
+          title="One Thing AI Assistant"
+        >
+          <i class="lucide-sparkles"></i> One Thing
+        </button>
+        <button
+          id="ai-assistant-btn"
+          class="bg-purple-100 text-purple-700 hover:bg-purple-200 px-4 py-2 rounded-lg text-sm font-semibold transition-colors flex items-center gap-2"
+          title="AI Knowledge Manager"
+        >
+          <i class="lucide-bot text-sm"></i> AI
+        </button>
+        <button
+          id="manage-members-btn"
+          class="p-2 rounded-lg hover:bg-gray-100 transition-colors"
+          title="Manage Members"
+        >
+          <i class="lucide-users"></i>
+        </button>
+        <button
+          id="add-task-btn"
+          class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-colors flex items-center gap-2"
+        >
+          <i class="lucide-plus text-sm"></i> Thêm Task
+        </button>
+      </div>
     </nav>
-
     <!-- Main Content -->
     <main class="max-w-7xl mx-auto p-6">
-        <!-- Stats Row -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-            <div class="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-                <p class="text-sm text-gray-500 font-medium mb-1">Tổng số Task</p>
-                <h3 id="stat-total" class="text-3xl font-bold">0</h3>
-            </div>
-            <div class="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-                <p class="text-sm text-gray-500 font-medium mb-1">Đang thực hiện</p>
-                <h3 id="stat-progress" class="text-3xl font-bold text-blue-600">0</h3>
-            </div>
-            <div class="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-                <p class="text-sm text-gray-500 font-medium mb-1">Đã hoàn thành</p>
-                <h3 id="stat-done" class="text-3xl font-bold text-green-600">0</h3>
-            </div>
+      <!-- Stats Row -->
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+        <div
+          class="bg-white p-6 rounded-xl border border-gray-200 shadow-sm transition-colors duration-300"
+          id="stat-total-card"
+        >
+          <p class="text-sm text-gray-500 font-medium mb-1">Tổng số Task</p>
+          <h3 id="stat-total" class="text-3xl font-bold">0</h3>
         </div>
-
-        <!-- Kanban Board -->
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <!-- Todo Column -->
-            <div class="flex flex-col gap-4">
-                <div class="flex items-center justify-between px-2">
-                    <h2 class="font-bold text-gray-700 flex items-center gap-2">
-                        <span class="w-2 h-2 bg-gray-400 rounded-full"></span> Cần làm
-                    </h2>
-                    <span id="count-todo" class="bg-gray-200 text-gray-600 text-xs font-bold px-2 py-1 rounded-full">0</span>
-                </div>
-                <div id="col-todo" class="kanban-column bg-gray-100/50 rounded-xl p-3 border-2 border-dashed border-gray-200 flex flex-col gap-3"></div>
-            </div>
-
-            <!-- In Progress Column -->
-            <div class="flex flex-col gap-4">
-                <div class="flex items-center justify-between px-2">
-                    <h2 class="font-bold text-gray-700 flex items-center gap-2">
-                        <span class="w-2 h-2 bg-blue-500 rounded-full"></span> Đang làm
-                    </h2>
-                    <span id="count-progress" class="bg-blue-100 text-blue-600 text-xs font-bold px-2 py-1 rounded-full">0</span>
-                </div>
-                <div id="col-progress" class="kanban-column bg-blue-50/30 rounded-xl p-3 border-2 border-dashed border-blue-100 flex flex-col gap-3"></div>
-            </div>
-
-            <!-- Done Column -->
-            <div class="flex flex-col gap-4">
-                <div class="flex items-center justify-between px-2">
-                    <h2 class="font-bold text-gray-700 flex items-center gap-2">
-                        <span class="w-2 h-2 bg-green-500 rounded-full"></span> Hoàn thành
-                    </h2>
-                    <span id="count-done" class="bg-green-100 text-green-600 text-xs font-bold px-2 py-1 rounded-full">0</span>
-                </div>
-                <div id="col-done" class="kanban-column bg-green-50/30 rounded-xl p-3 border-2 border-dashed border-green-100 flex flex-col gap-3"></div>
-            </div>
+        <div
+          class="bg-white p-6 rounded-xl border border-gray-200 shadow-sm transition-colors duration-300"
+          id="stat-progress-card"
+        >
+          <p class="text-sm text-gray-500 font-medium mb-1">Đang thực hiện</p>
+          <h3 id="stat-progress" class="text-3xl font-bold text-blue-600">0</h3>
         </div>
+        <div
+          class="bg-white p-6 rounded-xl border border-gray-200 shadow-sm transition-colors duration-300"
+          id="stat-review-card"
+        >
+          <p class="text-sm text-gray-500 font-medium mb-1">Đang Review</p>
+          <h3 id="stat-review" class="text-3xl font-bold text-yellow-600">0</h3>
+        </div>
+        <div
+          class="bg-white p-6 rounded-xl border border-gray-200 shadow-sm transition-colors duration-300"
+          id="stat-done-card"
+        >
+          <p class="text-sm text-gray-500 font-medium mb-1">Đã hoàn thành</p>
+          <h3 id="stat-done" class="text-3xl font-bold text-green-600">0</h3>
+        </div>
+      </div>
+      <!-- Kanban Board -->
+      <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        <!-- Todo Column -->
+        <div class="flex flex-col gap-4">
+          <div class="flex items-center justify-between px-2">
+            <h2 class="font-bold text-gray-700 flex items-center gap-2">
+              <span class="w-2 h-2 bg-gray-400 rounded-full"></span> Cần làm
+            </h2>
+            <span
+              id="count-todo"
+              class="bg-gray-200 text-gray-600 text-xs font-bold px-2 py-1 rounded-full"
+              >0</span
+            >
+          </div>
+          <div
+            id="col-todo"
+            class="kanban-column bg-gray-100/50 rounded-xl p-3 border-2 border-dashed border-gray-200 flex flex-col gap-3"
+          ></div>
+        </div>
+        <!-- In Progress Column -->
+        <div class="flex flex-col gap-4">
+          <div class="flex items-center justify-between px-2">
+            <h2 class="font-bold text-gray-700 flex items-center gap-2">
+              <span class="w-2 h-2 bg-blue-500 rounded-full"></span> Đang làm
+            </h2>
+            <span
+              id="count-progress"
+              class="bg-blue-100 text-blue-600 text-xs font-bold px-2 py-1 rounded-full"
+              >0</span
+            >
+          </div>
+          <div
+            id="col-progress"
+            class="kanban-column bg-blue-50/30 rounded-xl p-3 border-2 border-dashed border-blue-100 flex flex-col gap-3"
+          ></div>
+        </div>
+        <!-- Review Column -->
+        <div class="flex flex-col gap-4">
+          <div class="flex items-center justify-between px-2">
+            <h2 class="font-bold text-gray-700 flex items-center gap-2">
+              <span class="w-2 h-2 bg-yellow-500 rounded-full"></span> Đang
+              Review
+            </h2>
+            <span
+              id="count-review"
+              class="bg-yellow-100 text-yellow-600 text-xs font-bold px-2 py-1 rounded-full"
+              >0</span
+            >
+          </div>
+          <div
+            id="col-review"
+            class="kanban-column bg-yellow-50/30 rounded-xl p-3 border-2 border-dashed border-yellow-100 flex flex-col gap-3"
+          ></div>
+        </div>
+        <!-- Done Column -->
+        <div class="flex flex-col gap-4">
+          <div class="flex items-center justify-between px-2">
+            <h2 class="font-bold text-gray-700 flex items-center gap-2">
+              <span class="w-2 h-2 bg-green-500 rounded-full"></span> Hoàn thành
+            </h2>
+            <span
+              id="count-done"
+              class="bg-green-100 text-green-600 text-xs font-bold px-2 py-1 rounded-full"
+              >0</span
+            >
+          </div>
+          <div
+            id="col-done"
+            class="kanban-column bg-green-50/30 rounded-xl p-3 border-2 border-dashed border-green-100 flex flex-col gap-3"
+          ></div>
+        </div>
+      </div>
     </main>
-
     <!-- Modal Task -->
-    <div id="task-modal" class="fixed inset-0 bg-black/50 hidden z-50 flex items-center justify-center p-4">
-        <div class="bg-white rounded-2xl w-full max-w-md p-8 shadow-2xl">
-            <h2 class="text-2xl font-bold mb-6">Thêm Task mới</h2>
-            <form id="task-form" class="space-y-4">
-                <div>
-                    <label class="block text-sm font-semibold mb-1 flex justify-between">
-                        Tiêu đề
-                        <span class="text-[10px] text-purple-600 font-bold cursor-pointer hover:underline" onclick="aiAction('optimize-title')">AI Optimize</span>
-                    </label>
-                    <input type="text" id="task-title" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none">
-                </div>
-                <div>
-                    <label class="block text-sm font-semibold mb-1 flex justify-between">
-                        Mô tả / Nội dung Docs
-                        <div class="flex gap-2">
-                            <span class="text-[10px] text-purple-600 font-bold cursor-pointer hover:underline" onclick="aiAction('fix-grammar')">Fix Grammar</span>
-                            <span class="text-[10px] text-purple-600 font-bold cursor-pointer hover:underline" onclick="aiAction('summarize')">Summarize</span>
-                            <span class="text-[10px] text-purple-600 font-bold cursor-pointer hover:underline" onclick="aiAction('rewrite-professional')">Professional Tone</span>
-                        </div>
-                    </label>
-                    <textarea id="task-desc" rows="5" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm"></textarea>
-                </div>
-                <div>
-                    <label class="block text-sm font-semibold mb-1">Người thực hiện</label>
-                    <select id="task-assignee" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none">
-                        <!-- Members will be injected here -->
-                    </select>
-                </div>
-                <div class="flex justify-end gap-3 mt-8">
-                    <button type="button" id="close-modal" class="px-6 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">Hủy</button>
-                    <button type="submit" class="px-6 py-2 text-sm font-semibold bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 shadow-lg shadow-indigo-200 transition-all">Tạo Task</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <!-- AI Assistant Side Panel -->
-    <div id="ai-panel" class="fixed inset-y-0 right-0 w-80 bg-white shadow-2xl transform translate-x-full transition-transform duration-300 z-50 border-l border-gray-200 flex flex-col">
-        <div class="p-4 border-b border-gray-100 flex justify-between items-center bg-purple-50">
-            <h3 class="font-bold text-purple-800 flex items-center gap-2">
-                <i class="lucide-bot"></i> AI Knowledge Manager
-            </h3>
-            <button id="close-ai-panel" class="text-gray-400 hover:text-gray-600">
-                <i class="lucide-x"></i>
+    <div
+      id="task-modal"
+      class="fixed inset-0 bg-black/50 hidden z-50 flex items-center justify-center p-4"
+    >
+      <div
+        class="bg-white rounded-2xl w-full max-w-md p-8 shadow-2xl transition-colors duration-300"
+        id="task-modal-content"
+      >
+        <h2 class="text-2xl font-bold mb-6" id="task-modal-title">
+          Thêm Task mới
+        </h2>
+        <form id="task-form" class="space-y-4">
+          <input type="hidden" id="task-id" />
+          <div>
+            <label class="block text-sm font-semibold mb-1 flex justify-between">
+              Tiêu đề
+              <span
+                class="text-[10px] text-purple-600 font-bold cursor-pointer hover:underline"
+                onclick="aiAction('optimize-title')"
+                >AI Optimize</span
+              >
+            </label>
+            <input
+              type="text"
+              id="task-title"
+              required
+              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none bg-white text-gray-900 transition-colors duration-300"
+            />
+          </div>
+          <div>
+            <label class="block text-sm font-semibold mb-1 flex justify-between">
+              Mô tả
+              <div class="flex gap-2">
+                <span
+                  class="text-[10px] text-purple-600 font-bold cursor-pointer hover:underline"
+                  onclick="aiAction('fix-grammar')"
+                  >Fix Grammar</span
+                >
+                <span
+                  class="text-[10px] text-purple-600 font-bold cursor-pointer hover:underline"
+                  onclick="aiAction('summarize')"
+                  >Summarize</span
+                >
+                <span
+                  class="text-[10px] text-purple-600 font-bold cursor-pointer hover:underline"
+                  onclick="aiAction('rewrite-professional')"
+                  >Professional</span
+                >
+              </div>
+            </label>
+            <textarea
+              id="task-desc"
+              rows="3"
+              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none bg-white text-gray-900 transition-colors duration-300"
+            ></textarea>
+          </div>
+          <div>
+            <label class="block text-sm font-semibold mb-1"
+              >Người thực hiện</label
+            >
+            <select
+              id="task-assignee"
+              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none bg-white text-gray-900 transition-colors duration-300"
+            >
+              <!-- Members will be injected here -->
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm font-semibold mb-1">Hạn nộp</label>
+            <input
+              type="date"
+              id="task-deadline"
+              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none bg-white text-gray-900 transition-colors duration-300"
+            />
+          </div>
+          <div class="flex justify-end gap-3 mt-8">
+            <button
+              type="button"
+              id="close-modal"
+              class="px-6 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+            >
+              Hủy
             </button>
-        </div>
-        <div id="ai-chat-history" class="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50">
-            <div class="bg-white p-3 rounded-lg shadow-sm text-sm border border-purple-100">
-                Chào Musketeer! Tôi là AI Knowledge Manager. Tôi đã nắm rõ bối cảnh của 3 thành viên: Athos, Porthos và Aramis. Bạn cần tôi giúp gì về các task hiện tại không?
-            </div>
-        </div>
-        <div class="p-4 border-t border-gray-100">
-            <div class="relative">
-                <input type="text" id="ai-input" placeholder="Hỏi về context workspace..." class="w-full pl-4 pr-10 py-2 border border-gray-300 rounded-full text-sm focus:ring-2 focus:ring-purple-500 outline-none">
-                <button id="send-ai-query" class="absolute right-2 top-1.5 text-purple-600 hover:text-purple-800">
-                    <i class="lucide-send"></i>
-                </button>
-            </div>
-        </div>
+            <button
+              type="submit"
+              class="px-6 py-2 text-sm font-semibold bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 shadow-lg shadow-indigo-200 transition-all"
+              id="task-submit-btn"
+            >
+              Tạo Task
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
-
+    <!-- Member Management Modal -->
+    <div
+      id="member-modal"
+      class="fixed inset-0 bg-black/50 hidden z-50 flex items-center justify-center p-4"
+    >
+      <div
+        class="bg-white rounded-2xl w-full max-w-md p-8 shadow-2xl transition-colors duration-300"
+        id="member-modal-content"
+      >
+        <h2 class="text-2xl font-bold mb-6">Quản lý thành viên</h2>
+        <div id="member-list" class="space-y-3 mb-6">
+          <!-- Members will be injected here -->
+        </div>
+        <form id="member-form" class="space-y-4">
+          <input type="hidden" id="member-id" />
+          <div>
+            <label class="block text-sm font-semibold mb-1">Tên</label>
+            <input
+              type="text"
+              id="member-name"
+              required
+              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none bg-white text-gray-900 transition-colors duration-300"
+            />
+          </div>
+          <div class="flex justify-end gap-3">
+            <button
+              type="button"
+              id="close-member-modal"
+              class="px-6 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+            >
+              Đóng
+            </button>
+            <button
+              type="submit"
+              class="px-6 py-2 text-sm font-semibold bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-all"
+              id="member-submit-btn"
+            >
+              Thêm thành viên
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+    <!-- One Thing Chat Panel -->
+    <div
+      id="one-thing-panel"
+      class="fixed bottom-4 right-4 w-96 max-w-[90vw] bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 hidden z-50 flex flex-col overflow-hidden transition-all duration-300"
+    >
+      <!-- Chat Header -->
+      <div
+        class="bg-gradient-to-r from-indigo-600 to-purple-600 px-4 py-3 flex justify-between items-center"
+      >
+        <div class="flex items-center gap-2 text-white">
+          <i class="lucide-sparkles"></i>
+          <h3 class="font-bold">One Thing Assistant</h3>
+        </div>
+        <div class="flex items-center gap-2">
+          <button
+            id="focus-mode-btn"
+            class="p-1.5 rounded-lg hover:bg-white/20 text-white transition-colors"
+            title="Focus Mode"
+          >
+            <i class="lucide-target"></i>
+          </button>
+          <button
+            id="close-one-thing-btn"
+            class="p-1.5 rounded-lg hover:bg-white/20 text-white transition-colors"
+          >
+            <i class="lucide-x"></i>
+          </button>
+        </div>
+      </div>
+      <!-- Messages -->
+      <div
+        id="one-thing-messages"
+        class="flex-1 p-4 overflow-y-auto max-h-80 space-y-4"
+      ></div>
+      <!-- Input -->
+      <div class="p-4 border-t border-gray-200 dark:border-gray-700">
+        <form id="one-thing-form" class="flex gap-2">
+          <input
+            type="text"
+            id="one-thing-input"
+            placeholder="Hỏi 'hôm nay làm gì?'..."
+            class="flex-1 px-4 py-2 rounded-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none"
+          />
+          <button
+            type="submit"
+            class="bg-indigo-600 hover:bg-indigo-700 text-white p-2 rounded-full transition-colors"
+          >
+            <i class="lucide-send"></i>
+          </button>
+        </form>
+      </div>
+    </div>
+    <!-- Focus Mode Overlay -->
+    <div
+      id="focus-mode-overlay"
+      class="fixed inset-0 bg-black/80 z-40 hidden flex items-center justify-center p-4"
+    >
+      <div
+        id="focus-mode-content"
+        class="bg-white dark:bg-gray-800 rounded-2xl p-8 max-w-lg w-full shadow-2xl border border-gray-200 dark:border-gray-700"
+      >
+        <div class="flex justify-between items-center mb-6">
+          <div class="flex items-center gap-2">
+            <div
+              class="bg-gradient-to-r from-indigo-500 to-purple-500 p-2 rounded-lg text-white"
+            >
+              <i class="lucide-target"></i>
+            </div>
+            <h2 class="text-2xl font-bold text-gray-900 dark:text-white">
+              One Thing Today
+            </h2>
+          </div>
+          <button
+            id="close-focus-mode-btn"
+            class="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 transition-colors"
+          >
+            <i class="lucide-x"></i>
+          </button>
+        </div>
+        <div id="focus-mode-task"></div>
+      </div>
+    </div>
+    <div
+      id="ai-panel"
+      class="fixed inset-y-0 right-0 w-96 max-w-[90vw] bg-white dark:bg-gray-800 shadow-2xl transform translate-x-full transition-transform duration-300 z-50 border-l border-gray-200 dark:border-gray-700 flex flex-col"
+    >
+      <div
+        class="p-4 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center bg-purple-50 dark:bg-gray-900"
+      >
+        <h3
+          class="font-bold text-purple-800 dark:text-purple-300 flex items-center gap-2"
+        >
+          <i class="lucide-bot"></i> AI Knowledge Manager
+        </h3>
+        <button
+          id="close-ai-panel"
+          class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+        >
+          <i class="lucide-x"></i>
+        </button>
+      </div>
+      <div
+        id="ai-chat-history"
+        class="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50 dark:bg-gray-900"
+      >
+        <div
+          class="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-sm text-sm border border-purple-100 dark:border-gray-700 text-gray-900 dark:text-white"
+        >
+          Chào Musketeer! Tôi có thể giúp tổng hợp tình hình workspace, trả lời câu
+          hỏi về task và hỗ trợ viết nội dung nhanh trong form task.
+        </div>
+      </div>
+      <div class="p-4 border-t border-gray-100 dark:border-gray-700">
+        <div class="relative">
+          <input
+            type="text"
+            id="ai-input"
+            placeholder="Hỏi về context workspace..."
+            class="w-full pl-4 pr-10 py-2 border border-gray-300 dark:border-gray-600 rounded-full text-sm focus:ring-2 focus:ring-purple-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+          />
+          <button
+            id="send-ai-query"
+            class="absolute right-2 top-1.5 text-purple-600 hover:text-purple-800 dark:text-purple-300 dark:hover:text-purple-200"
+          >
+            <i class="lucide-send"></i>
+          </button>
+        </div>
+      </div>
+    </div>
     <script src="script.js"></script>
-</body>
+  </body>
 </html>
