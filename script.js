@@ -1,1016 +1,925 @@
 // State Management
-const STORAGE_KEYS = {
-    members: '3musk_members',
-    okrTasks: '3musk_okr_tasks',
-    kanbanTasks: '3musk_kanban_tasks',
-    activeView: '3musk_active_view'
-};
-
-const MEMBER_COLORS = [
-    'bg-red-500',
-    'bg-blue-500',
-    'bg-green-500',
-    'bg-purple-500',
-    'bg-orange-500',
-    'bg-pink-500',
-    'bg-teal-500',
-    'bg-indigo-500'
+const colors = [
+  "bg-red-500",
+  "bg-blue-500",
+  "bg-green-500",
+  "bg-purple-500",
+  "bg-pink-500",
+  "bg-orange-500",
 ];
 
-function makeAvatar(name) {
-    const cleaned = (name || '').trim();
-    if (!cleaned) return '?';
-    const parts = cleaned.split(/\s+/).filter(Boolean);
-    if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
-    return cleaned.slice(0, 2).toUpperCase();
-}
-
-function getNextMemberColor() {
-    const used = new Set((state?.members || []).map(m => m.color));
-    const available = MEMBER_COLORS.find(c => !used.has(c));
-    return available || MEMBER_COLORS[(state.members.length || 0) % MEMBER_COLORS.length];
-}
-
-function loadMembers() {
-    const raw = localStorage.getItem(STORAGE_KEYS.members);
-    if (!raw) return null;
-    try {
-        const parsed = JSON.parse(raw);
-        if (!Array.isArray(parsed) || parsed.length === 0) return null;
-        return parsed.map(m => ({
-            id: m.id,
-            name: m.name,
-            color: m.color || 'bg-gray-500',
-            avatar: m.avatar || makeAvatar(m.name)
-        })).filter(m => m.id != null && m.name);
-    } catch {
-        return null;
-    }
-}
-
 let state = {
-    members: loadMembers() || [
-        { id: 1, name: 'Athos', color: 'bg-red-500', avatar: 'A' },
-        { id: 2, name: 'Porthos', color: 'bg-blue-500', avatar: 'P' },
-        { id: 3, name: 'Aramis', color: 'bg-green-500', avatar: 'Ar' }
-    ],
-    tasks: JSON.parse(localStorage.getItem(STORAGE_KEYS.okrTasks)) || [],
-    kanbanTasks: JSON.parse(localStorage.getItem(STORAGE_KEYS.kanbanTasks)) || [],
-    activeView: localStorage.getItem(STORAGE_KEYS.activeView) || 'okr',
-    currentFilter: 'all'
+  members: JSON.parse(localStorage.getItem("3musk_members")) || [
+    { id: 1, name: "Athos", color: colors[0], avatar: "A" },
+    { id: 2, name: "Porthos", color: colors[1], avatar: "P" },
+    { id: 3, name: "Aramis", color: colors[2], avatar: "Ar" },
+  ],
+  tasks: JSON.parse(localStorage.getItem("3musk_tasks")) || [],
+  darkMode: JSON.parse(localStorage.getItem("3musk_darkMode")) || false,
+  currentUser: null, // For review purposes - we'll use this to track who's approving
 };
 
+// Initialize current user (just pick first member for demo)
+if (state.members.length > 0 && !state.currentUser) {
+  state.currentUser = state.members[0].id;
+}
+
 // DOM Elements
-const taskModal = document.getElementById('task-modal');
-const taskForm = document.getElementById('task-form');
-const addTaskBtn = document.getElementById('add-task-btn');
-const closeModalBtns = [document.getElementById('close-modal'), document.getElementById('close-modal-2')];
-const memberBadges = document.getElementById('member-badges');
-const taskAssigneeSelect = document.getElementById('task-assignee');
-const aiPanel = document.getElementById('ai-panel');
-const aiAssistantBtn = document.getElementById('ai-assistant-btn');
-const closeAiPanelBtn = document.getElementById('close-ai-panel');
-const aiInput = document.getElementById('ai-input');
-const sendAiBtn = document.getElementById('send-ai-query');
-const aiChatHistory = document.getElementById('ai-chat-history');
-const viewOkrBtn = document.getElementById('view-okr-btn');
-const viewKanbanBtn = document.getElementById('view-kanban-btn');
-const okrView = document.getElementById('okr-view');
-const kanbanView = document.getElementById('kanban-view');
-const membersBtn = document.getElementById('members-btn');
-const membersModal = document.getElementById('members-modal');
-const closeMembersModalBtn = document.getElementById('close-members-modal');
-const memberForm = document.getElementById('member-form');
-const memberIdInput = document.getElementById('member-id');
-const memberNameInput = document.getElementById('member-name');
-const membersList = document.getElementById('members-list');
-const kanbanModal = document.getElementById('kanban-task-modal');
-const kanbanModalTitle = document.getElementById('kanban-modal-title');
-const kanbanTaskForm = document.getElementById('kanban-task-form');
-const kanbanCloseModalBtns = [document.getElementById('close-kanban-modal'), document.getElementById('close-kanban-modal-2')];
-const kanbanTaskIdInput = document.getElementById('kanban-task-id');
-const kanbanTaskTitleInput = document.getElementById('kanban-task-title');
-const kanbanTaskDescInput = document.getElementById('kanban-task-desc');
-const kanbanTaskAssigneeSelect = document.getElementById('kanban-task-assignee');
-const kanbanTaskDeadlineInput = document.getElementById('kanban-task-deadline');
+const taskModal = document.getElementById("task-modal");
+const taskForm = document.getElementById("task-form");
+const addTaskBtn = document.getElementById("add-task-btn");
+const closeModalBtn = document.getElementById("close-modal");
+const memberBadges = document.getElementById("member-badges");
+const taskAssigneeSelect = document.getElementById("task-assignee");
+const memberModal = document.getElementById("member-modal");
+const memberForm = document.getElementById("member-form");
+const manageMembersBtn = document.getElementById("manage-members-btn");
+const closeMemberModalBtn = document.getElementById("close-member-modal");
+const memberList = document.getElementById("member-list");
+const darkModeBtn = document.getElementById("dark-mode-btn");
+const exportBtn = document.getElementById("export-btn");
+const importFile = document.getElementById("import-file");
+// One Thing DOM Elements
+const oneThingBtn = document.getElementById("one-thing-btn");
+const oneThingPanel = document.getElementById("one-thing-panel");
+const closeOneThingBtn = document.getElementById("close-one-thing-btn");
+const oneThingForm = document.getElementById("one-thing-form");
+const oneThingInput = document.getElementById("one-thing-input");
+const oneThingMessages = document.getElementById("one-thing-messages");
+const focusModeBtn = document.getElementById("focus-mode-btn");
+const focusModeOverlay = document.getElementById("focus-mode-overlay");
+const closeFocusModeBtn = document.getElementById("close-focus-mode-btn");
+const focusModeTask = document.getElementById("focus-mode-task");
+// AI Knowledge Manager DOM Elements
+const aiPanel = document.getElementById("ai-panel");
+const aiAssistantBtn = document.getElementById("ai-assistant-btn");
+const closeAiPanelBtn = document.getElementById("close-ai-panel");
+const aiInput = document.getElementById("ai-input");
+const sendAiBtn = document.getElementById("send-ai-query");
+const aiChatHistory = document.getElementById("ai-chat-history");
 
 // Initialize
 function init() {
-    saveMembers();
-    renderMembers();
-    renderTasks();
-    renderAssigneeFilter();
-    renderMembersList();
-    applyActiveView();
-    renderKanban();
-    setupEventListeners();
-    setupAutoAnalysis();
+  applyDarkMode();
+  renderMembers();
+  renderTasks();
+  setupEventListeners();
 }
 
-// ============= MEMBER MANAGEMENT =============
+// Save state to localStorage
+function saveState() {
+  localStorage.setItem("3musk_members", JSON.stringify(state.members));
+  localStorage.setItem("3musk_tasks", JSON.stringify(state.tasks));
+  localStorage.setItem("3musk_darkMode", JSON.stringify(state.darkMode));
+}
+
+// Dark Mode
+function applyDarkMode() {
+  const body = document.body;
+  const navbar = document.getElementById("navbar");
+  const statCards = [
+    document.getElementById("stat-total-card"),
+    document.getElementById("stat-progress-card"),
+    document.getElementById("stat-review-card"),
+    document.getElementById("stat-done-card"),
+  ];
+  const taskModalContent = document.getElementById("task-modal-content");
+  const memberModalContent = document.getElementById("member-modal-content");
+  const inputs = document.querySelectorAll("input, textarea, select");
+
+  if (state.darkMode) {
+    body.classList.add("bg-gray-900", "text-white");
+    body.classList.remove("bg-gray-50", "text-gray-900");
+    navbar.classList.add("bg-gray-800", "border-gray-700");
+    navbar.classList.remove("bg-white", "border-gray-200");
+    statCards.forEach((card) => {
+      card.classList.add("bg-gray-800", "border-gray-700");
+      card.classList.remove("bg-white", "border-gray-200");
+      card.querySelector("p").classList.add("text-gray-400");
+      card.querySelector("p").classList.remove("text-gray-500");
+    });
+    taskModalContent.classList.add("bg-gray-800");
+    taskModalContent.classList.remove("bg-white");
+    memberModalContent.classList.add("bg-gray-800");
+    memberModalContent.classList.remove("bg-white");
+    inputs.forEach((input) => {
+      input.classList.add("bg-gray-700", "text-white", "border-gray-600");
+      input.classList.remove("bg-white", "text-gray-900", "border-gray-300");
+    });
+    darkModeBtn.innerHTML = '<i class="lucide-moon"></i>';
+  } else {
+    body.classList.remove("bg-gray-900", "text-white");
+    body.classList.add("bg-gray-50", "text-gray-900");
+    navbar.classList.remove("bg-gray-800", "border-gray-700");
+    navbar.classList.add("bg-white", "border-gray-200");
+    statCards.forEach((card) => {
+      card.classList.remove("bg-gray-800", "border-gray-700");
+      card.classList.add("bg-white", "border-gray-200");
+      card.querySelector("p").classList.remove("text-gray-400");
+      card.querySelector("p").classList.add("text-gray-500");
+    });
+    taskModalContent.classList.remove("bg-gray-800");
+    taskModalContent.classList.add("bg-white");
+    memberModalContent.classList.remove("bg-gray-800");
+    memberModalContent.classList.add("bg-white");
+    inputs.forEach((input) => {
+      input.classList.remove("bg-gray-700", "text-white", "border-gray-600");
+      input.classList.add("bg-white", "text-gray-900", "border-gray-300");
+    });
+    darkModeBtn.innerHTML = '<i class="lucide-sun"></i>';
+  }
+}
+
+// Render Members
 function renderMembers() {
-    memberBadges.innerHTML = state.members.map(m => `
-        <div class="w-9 h-9 rounded-full ${m.color} text-white flex items-center justify-center text-xs font-bold border-2 border-white shadow-sm" title="${m.name}">
-            ${m.avatar}
+  // Render badges
+  memberBadges.innerHTML = state.members
+    .map(
+      (m) => `
+    <div class="w-8 h-8 rounded-full ${m.color} text-white flex items-center justify-center text-xs font-bold border-2 border-white ring-1 ring-gray-200 cursor-pointer" title="${m.name}" onclick="selectUser(${m.id})">
+      ${m.avatar}
+    </div>
+  `,
+    )
+    .join("");
+
+  // Render task assignee select
+  taskAssigneeSelect.innerHTML = state.members
+    .map(
+      (m) => `
+    <option value="${m.id}">${m.name}</option>
+  `,
+    )
+    .join("");
+
+  // Render member management list
+  renderMemberList();
+}
+
+function renderMemberList() {
+  memberList.innerHTML = state.members
+    .map(
+      (m) => `
+    <div class="flex items-center justify-between p-3 bg-gray-100 rounded-lg dark:bg-gray-700">
+      <div class="flex items-center gap-2">
+        <div class="w-8 h-8 rounded-full ${m.color} text-white flex items-center justify-center text-xs font-bold">
+          ${m.avatar}
         </div>
-    `).join('');
-
-    taskAssigneeSelect.innerHTML = state.members.map(m => `
-        <option value="${m.id}">${m.name}</option>
-    `).join('');
-
-    if (kanbanTaskAssigneeSelect) {
-        kanbanTaskAssigneeSelect.innerHTML = state.members.map(m => `
-            <option value="${m.id}">${m.name}</option>
-        `).join('');
-    }
-}
-
-function renderAssigneeFilter() {
-    const filter = document.getElementById('assignee-filter');
-    filter.innerHTML = '<option value="">Tất cả thành viên</option>' + 
-        state.members.map(m => `<option value="${m.id}">${m.name}</option>`).join('');
-}
-
-function setActiveView(view) {
-    state.activeView = view;
-    localStorage.setItem(STORAGE_KEYS.activeView, view);
-    applyActiveView();
-}
-
-function applyActiveView() {
-    const isKanban = state.activeView === 'kanban';
-    if (okrView) okrView.classList.toggle('hidden', isKanban);
-    if (kanbanView) kanbanView.classList.toggle('hidden', !isKanban);
-
-    if (viewOkrBtn) {
-        viewOkrBtn.classList.toggle('bg-white', !isKanban);
-        viewOkrBtn.classList.toggle('shadow-sm', !isKanban);
-        viewOkrBtn.classList.toggle('text-gray-800', !isKanban);
-        viewOkrBtn.classList.toggle('text-gray-600', isKanban);
-    }
-    if (viewKanbanBtn) {
-        viewKanbanBtn.classList.toggle('bg-white', isKanban);
-        viewKanbanBtn.classList.toggle('shadow-sm', isKanban);
-        viewKanbanBtn.classList.toggle('text-gray-800', isKanban);
-        viewKanbanBtn.classList.toggle('text-gray-600', !isKanban);
-    }
-
-    renderMembers();
-    renderTasks();
-    renderKanban();
-}
-
-function saveMembers() {
-    localStorage.setItem(STORAGE_KEYS.members, JSON.stringify(state.members));
-}
-
-function openMembersModal(memberId = '') {
-    memberIdInput.value = memberId;
-    const member = state.members.find(m => m.id == memberId);
-    memberNameInput.value = member ? member.name : '';
-    membersModal.classList.remove('hidden');
-    memberNameInput.focus();
-}
-
-function closeMembersModal() {
-    membersModal.classList.add('hidden');
-    memberForm.reset();
-    memberIdInput.value = '';
-}
-
-function renderMembersList() {
-    membersList.innerHTML = state.members.map(m => `
-        <div class="px-4 py-3 flex items-center justify-between">
-            <div class="flex items-center gap-3">
-                <div class="w-9 h-9 rounded-full ${m.color} text-white flex items-center justify-center text-xs font-bold shadow-sm">
-                    ${m.avatar}
-                </div>
-                <div>
-                    <p class="font-semibold text-sm text-gray-800">${m.name}</p>
-                    <p class="text-xs text-gray-400">ID: ${m.id}</p>
-                </div>
-            </div>
-            <div class="flex items-center gap-2">
-                <button type="button" onclick="editMember('${m.id}')" class="text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 p-2 rounded-lg transition-colors">
-                    <i class="lucide-pencil text-sm"></i>
-                </button>
-                <button type="button" onclick="deleteMember('${m.id}')" class="text-gray-500 hover:text-red-600 hover:bg-red-50 p-2 rounded-lg transition-colors">
-                    <i class="lucide-trash-2 text-sm"></i>
-                </button>
-            </div>
-        </div>
-    `).join('');
-}
-
-window.editMember = (memberId) => openMembersModal(memberId);
-
-window.deleteMember = (memberId) => {
-    if (state.members.length <= 1) {
-        alert('Không thể xóa thành viên cuối cùng.');
-        return;
-    }
-    const member = state.members.find(m => m.id == memberId);
-    if (!member) return;
-    if (!confirm(`Xóa thành viên "${member.name}"?`)) return;
-
-    const remaining = state.members.filter(m => m.id != memberId);
-    const fallbackId = remaining[0]?.id;
-    state.members = remaining;
-    if (fallbackId != null) {
-        state.tasks.forEach(t => { if (t.assigneeId == memberId) t.assigneeId = fallbackId; });
-        state.kanbanTasks.forEach(t => { if (t.assigneeId == memberId) t.assigneeId = fallbackId; });
-    }
-    saveMembers();
-    renderMembers();
-    renderAssigneeFilter();
-    renderMembersList();
-    renderTasks();
-    renderKanban();
-};
-
-// ============= OKR LOGIC =============
-// Auto calculate Priority based on deadline and keywords
-function calculatePriority(title, description, deadline) {
-    const text = (title + ' ' + description).toLowerCase();
-    const urgentKeywords = ['gấp', 'khẩn', 'urgent', 'asap', ' inmediatamente'];
-    const hasUrgent = urgentKeywords.some(k => text.includes(k));
-    
-    if (hasUrgent) return 'P0';
-    
-    if (!deadline) return 'P2';
-    
-    const deadlineDate = new Date(deadline);
-    const today = new Date();
-    const daysLeft = Math.ceil((deadlineDate - today) / (1000 * 60 * 60 * 24));
-    
-    if (daysLeft <= 0) return 'P0'; // Overdue
-    if (daysLeft <= 1) return 'P0'; // Less than 24h
-    if (daysLeft <= 3) return 'P1'; // Less than 3 days
-    return 'P2';
-}
-
-// Auto calculate Difficulty based on keywords
-function calculateDifficulty(description) {
-    const text = description.toLowerCase();
-    const hardKeywords = ['thiết kế', 'design', 'tích hợp', 'api', 'database', 'security', 'architecture', 'kiến trúc'];
-    const easyKeywords = ['sửa', 'fix', 'cập nhật', 'update', 'text', 'content', 'copy'];
-    
-    if (hardKeywords.some(k => text.includes(k))) return 'Khó';
-    if (easyKeywords.some(k => text.includes(k))) return 'Dễ';
-    return 'Trung bình';
-}
-
-// Auto generate Key Results based on description keywords
-function generateKeyResults(description) {
-    const text = description.toLowerCase();
-    let results = [];
-    
-    if (text.includes('thiết kế') || text.includes('design')) {
-        results = [
-            { id: Date.now().toString(), title: '📊 Research & Analyze requirements', completed: false },
-            { id: (Date.now() + 1).toString(), title: '📐 Create wireframe/mockup', completed: false },
-            { id: (Date.now() + 2).toString(), title: '⚙️ Implement design', completed: false },
-            { id: (Date.now() + 3).toString(), title: '✅ Review & QA', completed: false }
-        ];
-    } else if (text.includes('api') || text.includes('tích hợp')) {
-        results = [
-            { id: Date.now().toString(), title: '🔧 Setup environment', completed: false },
-            { id: (Date.now() + 1).toString(), title: '📡 Implement API endpoints', completed: false },
-            { id: (Date.now() + 2).toString(), title: '🧪 Write unit tests', completed: false },
-            { id: (Date.now() + 3).toString(), title: '📝 Document API', completed: false }
-        ];
-    } else if (text.includes('sửa') || text.includes('lỗi') || text.includes('bug')) {
-        results = [
-            { id: Date.now().toString(), title: '🔍 Reproduce bug', completed: false },
-            { id: (Date.now() + 1).toString(), title: '🎯 Identify root cause', completed: false },
-            { id: (Date.now() + 2).toString(), title: '🛠️ Fix the issue', completed: false },
-            { id: (Date.now() + 3).toString(), title: '🧪 Test regression', completed: false }
-        ];
-    } else {
-        results = [
-            { id: Date.now().toString(), title: '📖 Research & understand', completed: false },
-            { id: (Date.now() + 1).toString(), title: '📋 Create execution plan', completed: false },
-            { id: (Date.now() + 2).toString(), title: '⚡ Execute implementation', completed: false },
-            { id: (Date.now() + 3).toString(), title: '✅ Verify & finalize', completed: false }
-        ];
-    }
-    
-    return results;
-}
-
-// Calculate progress based on Key Results
-function calculateProgress(keyResults) {
-    if (!keyResults || keyResults.length === 0) return 0;
-    const completed = keyResults.filter(kr => kr.completed).length;
-    return Math.round((completed / keyResults.length) * 100);
-}
-
-// Calculate days remaining
-function calculateDaysRemaining(deadline) {
-    if (!deadline) return null;
-    const deadlineDate = new Date(deadline);
-    const today = new Date();
-    return Math.ceil((deadlineDate - today) / (1000 * 60 * 60 * 24));
-}
-
-// ============= AUTO ANALYSIS SETUP =============
-function setupAutoAnalysis() {
-    const titleInput = document.getElementById('task-title');
-    const descInput = document.getElementById('task-desc');
-    const deadlineInput = document.getElementById('task-deadline');
-    
-    const updateAnalysis = () => {
-        const priority = calculatePriority(titleInput.value, descInput.value, deadlineInput.value);
-        const difficulty = calculateDifficulty(descInput.value);
-        const days = calculateDaysRemaining(deadlineInput.value);
-        
-        document.getElementById('auto-analysis').classList.remove('hidden');
-        
-        const priorityEl = document.getElementById('auto-priority');
-        priorityEl.textContent = priority;
-        priorityEl.className = `ml-2 px-2 py-0.5 rounded text-xs font-bold text-white priority-${priority}`;
-        
-        const diffEl = document.getElementById('auto-difficulty');
-        diffEl.textContent = difficulty;
-        diffEl.className = `ml-2 px-2 py-0.5 rounded text-xs font-bold`;
-        if (difficulty === 'Dễ') diffEl.classList.add('bg-green-100', 'text-green-700');
-        else if (difficulty === 'Khó') diffEl.classList.add('bg-red-100', 'text-red-700');
-        else diffEl.classList.add('bg-yellow-100', 'text-yellow-700');
-        
-        document.getElementById('auto-days').textContent = days !== null ? `${days} ngày` : 'Không có DL';
-    };
-    
-    titleInput.addEventListener('input', updateAnalysis);
-    descInput.addEventListener('input', updateAnalysis);
-    deadlineInput.addEventListener('change', updateAnalysis);
-}
-
-// ============= KEY RESULTS MANAGEMENT =============
-let krCounter = 0;
-function addKeyResult(title = '') {
-    const list = document.getElementById('key-results-list');
-    const id = 'kr-' + (Date.now() + krCounter++);
-    const div = document.createElement('div');
-    div.className = 'flex gap-2 items-center';
-    div.innerHTML = `
-        <input type="checkbox" id="${id}" class="w-4 h-4 text-indigo-600 rounded" ${title.includes('✅') ? 'checked' : ''}>
-        <input type="text" value="${title.replace(/^[✅📊📐⚙️📝🔧📡🧪🔍🎯🛠️📖📋⚡✅]+ /g, '')}" 
-            class="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
-            placeholder="Key Result...">
-        <button type="button" onclick="this.parentElement.remove()" class="text-gray-400 hover:text-red-500">
-            <i class="lucide-trash-2 text-sm"></i>
+        <span class="font-medium">${m.name}</span>
+      </div>
+      <div class="flex gap-2">
+        <button onclick="editMember(${m.id})" class="p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded">
+          <i class="lucide-edit text-sm"></i>
         </button>
-    `;
-    list.appendChild(div);
+        <button onclick="deleteMember(${m.id})" class="p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded text-red-500">
+          <i class="lucide-trash-2 text-sm"></i>
+        </button>
+      </div>
+    </div>
+  `,
+    )
+    .join("");
 }
 
-// ============= TASK RENDERING =============
+// Render Tasks
 function renderTasks() {
-    const list = document.getElementById('task-list');
-    const emptyState = document.getElementById('empty-state');
-    
-    let filteredTasks = state.tasks;
-    
-    // Apply priority filter
-    if (state.currentFilter !== 'all') {
-        filteredTasks = filteredTasks.filter(t => t.priority === state.currentFilter);
-    }
-    
-    // Apply assignee filter
-    const assigneeFilter = document.getElementById('assignee-filter').value;
-    if (assigneeFilter) {
-        filteredTasks = filteredTasks.filter(t => t.assigneeId == assigneeFilter);
-    }
-    
-    // Sort by priority
-    const priorityOrder = { 'P0': 0, 'P1': 1, 'P2': 2 };
-    filteredTasks.sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority]);
-    
-    if (filteredTasks.length === 0) {
-        list.innerHTML = '';
-        emptyState.classList.remove('hidden');
-    } else {
-        emptyState.classList.add('hidden');
-        list.innerHTML = filteredTasks.map(task => renderTaskCard(task)).join('');
-    }
-    
-    updateStats();
-    saveState();
-}
+  const cols = {
+    todo: document.getElementById("col-todo"),
+    progress: document.getElementById("col-progress"),
+    review: document.getElementById("col-review"),
+    done: document.getElementById("col-done"),
+  };
 
-function renderTaskCard(task) {
-    const assignee = state.members.find(m => m.id == task.assigneeId);
-    const daysLeft = calculateDaysRemaining(task.deadline);
-    const progress = calculateProgress(task.keyResults);
-    
-    let deadlineClass = 'text-gray-500';
-    if (daysLeft !== null) {
-        if (daysLeft < 0) deadlineClass = 'text-red-600 font-bold';
-        else if (daysLeft <= 1) deadlineClass = 'text-red-500';
-        else if (daysLeft <= 3) deadlineClass = 'text-orange-500';
-    }
-    
-    let difficultyClass = 'diff-medium';
-    if (task.difficulty === 'Dễ') difficultyClass = 'diff-easy';
-    else if (task.difficulty === 'Khó') difficultyClass = 'diff-hard';
-    
-    return `
-        <div class="bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-all p-5 ${difficultyClass} cursor-pointer" onclick="openTaskDetail('${task.id}')">
-            <div class="flex justify-between items-start mb-3">
-                <div class="flex items-center gap-2">
-                    <span class="px-2.5 py-1 rounded text-xs font-bold text-white priority-${task.priority}">${task.priority}</span>
-                    <span class="px-2 py-0.5 rounded text-xs font-medium ${getDifficultyBg(task.difficulty)}">${task.difficulty}</span>
-                </div>
-                <div class="flex items-center gap-2">
-                    <span class="text-xs ${deadlineClass}">
-                        <i class="lucide-calendar text-xs mr-1"></i>
-                        ${task.deadline ? formatDate(task.deadline) : 'Không có deadline'}
-                        ${daysLeft !== null ? ` (${daysLeft < 0 ? Math.abs(daysLeft) + ' ngày quá hạn' : daysLeft + ' ngày'})` : ''}
-                    </span>
-                </div>
-            </div>
-            
-            <h3 class="font-bold text-gray-800 mb-2 text-lg">${task.title}</h3>
-            <p class="text-sm text-gray-500 mb-4 line-clamp-2">${task.description || 'Không có mô tả'}</p>
-            
-            <!-- Progress Bar -->
-            <div class="mb-4">
-                <div class="flex justify-between text-xs mb-1">
-                    <span class="text-gray-500">Tiến độ (${task.keyResults?.length || 0} Key Results)</span>
-                    <span class="font-bold ${progress === 100 ? 'text-green-600' : 'text-gray-700'}">${progress}%</span>
-                </div>
-                <div class="w-full bg-gray-200 rounded-full h-2">
-                    <div class="h-2 rounded-full transition-all ${progress === 100 ? 'bg-green-500' : 'bg-indigo-500'}" style="width: ${progress}%"></div>
-                </div>
-            </div>
-            
-            <div class="flex justify-between items-center pt-3 border-t border-gray-100">
-                <div class="flex items-center gap-2">
-                    <div class="w-7 h-7 rounded-full ${assignee?.color || 'bg-gray-400'} text-white flex items-center justify-center text-xs font-bold">
-                        ${assignee?.avatar || '?'}
-                    </div>
-                    <span class="text-sm font-medium text-gray-700">${assignee?.name || 'Chưa gán'}</span>
-                </div>
-                <div class="flex gap-2">
-                    <button onclick="event.stopPropagation(); toggleTaskStatus('${task.id}')" class="text-xs px-3 py-1.5 rounded-lg font-semibold ${getStatusBtnClass(task.status)}">
-                        ${getStatusText(task.status)}
-                    </button>
-                    <button onclick="event.stopPropagation(); deleteTask('${task.id}')" class="text-gray-400 hover:text-red-500 p-1.5 hover:bg-red-50 rounded-lg transition-colors">
-                        <i class="lucide-trash-2 text-sm"></i>
-                    </button>
-                </div>
-            </div>
+  const counts = {
+    todo: document.getElementById("count-todo"),
+    progress: document.getElementById("count-progress"),
+    review: document.getElementById("count-review"),
+    done: document.getElementById("count-done"),
+    total: document.getElementById("stat-total"),
+    statProgress: document.getElementById("stat-progress"),
+    statReview: document.getElementById("stat-review"),
+    statDone: document.getElementById("stat-done"),
+  };
+
+  // Clear columns
+  Object.values(cols).forEach((col) => (col.innerHTML = ""));
+
+  let statusCounts = { todo: 0, progress: 0, review: 0, done: 0 };
+
+  state.tasks.forEach((task) => {
+    const assignee = state.members.find((m) => m.id == task.assigneeId);
+    const taskEl = document.createElement("div");
+    taskEl.className =
+      "bg-white p-4 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow cursor-pointer group dark:bg-gray-800 dark:border-gray-700";
+
+    const isOverdue =
+      task.deadline &&
+      new Date(task.deadline) < new Date() &&
+      task.status !== "done";
+
+    taskEl.innerHTML = `
+      <div class="flex justify-between items-start mb-2">
+        <span class="text-xs font-bold px-2 py-0.5 rounded uppercase tracking-wider ${getStatusColor(task.status)}">
+          ${getStatusText(task.status)}
+        </span>
+        <div class="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <button onclick="editTask('${task.id}')" class="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded">
+            <i class="lucide-edit text-sm text-gray-500"></i>
+          </button>
+          <button onclick="deleteTask('${task.id}')" class="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded">
+            <i class="lucide-trash-2 text-sm text-red-500"></i>
+          </button>
         </div>
+      </div>
+      <h4 class="font-semibold text-gray-800 dark:text-white mb-1">${task.title}</h4>
+      <p class="text-sm text-gray-500 dark:text-gray-400 mb-4 line-clamp-2">${task.description || ""}</p>
+      ${
+        task.deadline
+          ? `
+        <div class="flex items-center gap-1 mb-2 text-xs ${isOverdue ? "text-red-500 font-medium" : "text-gray-500 dark:text-gray-400"}">
+          <i class="lucide-calendar"></i>
+          ${formatDate(task.deadline)}
+        </div>
+      `
+          : ""
+      }
+      ${
+        task.status === "review"
+          ? `
+        <div class="mb-3 flex gap-2 flex-wrap">
+          ${renderReviewButtons(task)}
+        </div>
+      `
+          : ""
+      }
+      <div class="flex justify-between items-center pt-3 border-t border-gray-100 dark:border-gray-700">
+        <div class="flex items-center gap-2">
+          <div class="w-6 h-6 rounded-full ${assignee?.color || "bg-gray-400"} text-white flex items-center justify-center text-[10px] font-bold">
+            ${assignee?.avatar || "?"}
+          </div>
+          <span class="text-xs text-gray-600 dark:text-gray-300 font-medium">${assignee?.name || "Unassigned"}</span>
+        </div>
+        <div class="flex gap-1">
+          ${task.status !== "todo" ? `<button onclick="updateTaskStatus('${task.id}', 'prev')" class="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"><i class="lucide-chevron-left text-sm text-gray-500"></i></button>` : ""}
+          ${task.status !== "done" && !(task.status === "review" && !canApprove(task)) ? `<button onclick="updateTaskStatus('${task.id}', 'next')" class="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-indigo-600"><i class="lucide-chevron-right text-sm"></i></button>` : ""}
+        </div>
+      </div>
     `;
+
+    cols[task.status].appendChild(taskEl);
+    statusCounts[task.status]++;
+  });
+
+  // Update counts
+  counts.todo.textContent = statusCounts.todo;
+  counts.progress.textContent = statusCounts.progress;
+  counts.review.textContent = statusCounts.review;
+  counts.done.textContent = statusCounts.done;
+  counts.total.textContent = state.tasks.length;
+  counts.statProgress.textContent = statusCounts.progress;
+  counts.statReview.textContent = statusCounts.review;
+  counts.statDone.textContent = statusCounts.done;
+
+  saveState();
 }
 
-function getDifficultyBg(diff) {
-    if (diff === 'Dễ') return 'bg-green-100 text-green-700';
-    if (diff === 'Khó') return 'bg-red-100 text-red-700';
-    return 'bg-yellow-100 text-yellow-700';
-}
-
-function getStatusBtnClass(status) {
-    switch(status) {
-        case 'Đã xong': return 'bg-green-100 text-green-700';
-        case 'Đang thực hiện': return 'bg-blue-100 text-blue-700';
-        case 'Tạm ngưng': return 'bg-gray-100 text-gray-600';
-        default: return 'bg-gray-100 text-gray-500';
-    }
+function getStatusColor(status) {
+  switch (status) {
+    case "todo":
+      return "bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300";
+    case "progress":
+      return "bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-300";
+    case "review":
+      return "bg-yellow-100 text-yellow-600 dark:bg-yellow-900 dark:text-yellow-300";
+    case "done":
+      return "bg-green-100 text-green-600 dark:bg-green-900 dark:text-green-300";
+    default:
+      return "bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300";
+  }
 }
 
 function getStatusText(status) {
-    switch(status) {
-        case 'Đã xong': return '✓ Hoàn thành';
-        case 'Đang thực hiện': return '⟳ Đang làm';
-        case 'Tạm ngưng': return '⏸ Tạm ngưng';
-        default: return '○ Chưa thực hiện';
-    }
+  switch (status) {
+    case "todo":
+      return "Cần làm";
+    case "progress":
+      return "Đang làm";
+    case "review":
+      return "Review";
+    case "done":
+      return "Hoàn thành";
+    default:
+      return status;
+  }
 }
 
 function formatDate(dateStr) {
-    const date = new Date(dateStr);
-    return date.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  const date = new Date(dateStr);
+  return date.toLocaleDateString("vi-VN", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
 }
 
-// ============= TASK DETAIL =============
-window.openTaskDetail = (taskId) => {
-    const task = state.tasks.find(t => t.id === taskId);
-    if (!task) return;
-    
-    const assignee = state.members.find(m => m.id == task.assigneeId);
-    const progress = calculateProgress(task.keyResults);
-    
-    const detailContent = document.getElementById('detail-content');
-    detailContent.innerHTML = `
-        <div class="flex justify-between items-start mb-6">
-            <div>
-                <span class="px-3 py-1 rounded text-sm font-bold text-white priority-${task.priority} mr-2">${task.priority}</span>
-                <span class="px-2 py-0.5 rounded text-xs font-medium ${getDifficultyBg(task.difficulty)}">${task.difficulty}</span>
-            </div>
-            <button onclick="closeDetailModal()" class="text-gray-400 hover:text-gray-600">
-                <i class="lucide-x text-xl"></i>
-            </button>
-        </div>
-        
-        <h2 class="text-2xl font-bold mb-4">${task.title}</h2>
-        
-        <div class="grid grid-cols-3 gap-4 mb-6">
-            <div class="bg-gray-50 p-4 rounded-lg">
-                <p class="text-xs text-gray-500 mb-1">Người nhận</p>
-                <div class="flex items-center gap-2">
-                    <div class="w-8 h-8 rounded-full ${assignee?.color || 'bg-gray-400'} text-white flex items-center justify-center text-xs font-bold">${assignee?.avatar}</div>
-                    <span class="font-semibold">${assignee?.name}</span>
-                </div>
-            </div>
-            <div class="bg-gray-50 p-4 rounded-lg">
-                <p class="text-xs text-gray-500 mb-1">Deadline</p>
-                <p class="font-semibold">${task.deadline ? formatDate(task.deadline) : 'Không có'}</p>
-            </div>
-            <div class="bg-gray-50 p-4 rounded-lg">
-                <p class="text-xs text-gray-500 mb-1">Tiến độ</p>
-                <p class="font-bold text-indigo-600">${progress}%</p>
-            </div>
-        </div>
-        
-        ${task.description ? `
-        <div class="mb-6">
-            <h3 class="font-semibold text-gray-700 mb-2">Mô tả</h3>
-            <p class="text-gray-600 bg-gray-50 p-4 rounded-lg">${task.description}</p>
-        </div>
-        ` : ''}
-        
-        <div class="mb-6">
-            <h3 class="font-semibold text-gray-700 mb-3">Key Results (OKR)</h3>
-            <div class="space-y-2">
-                ${(task.keyResults || []).map(kr => `
-                    <div class="flex items-center gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
-                        <input type="checkbox" ${kr.completed ? 'checked' : ''} 
-                            onchange="toggleKeyResult('${task.id}', '${kr.id}')"
-                            class="w-5 h-5 text-indigo-600 rounded">
-                        <span class="${kr.completed ? 'line-through text-gray-400' : 'text-gray-700'} flex-1">${kr.title}</span>
-                        ${kr.completed ? '<span class="text-xs text-green-600 font-semibold">✓</span>' : ''}
-                    </div>
-                `).join('')}
-            </div>
-        </div>
-        
-        ${task.notes ? `
-        <div class="mb-6">
-            <h3 class="font-semibold text-gray-700 mb-2">Ghi chú</h3>
-            <p class="text-gray-600 bg-yellow-50 p-4 rounded-lg border border-yellow-100">${task.notes}</p>
-        </div>
-        ` : ''}
-        
-        <div class="flex justify-between items-center pt-4 border-t border-gray-200">
-            <button onclick="toggleTaskStatus('${task.id}')" class="px-6 py-2 rounded-lg font-semibold ${getStatusBtnClass(task.status)}">
-                ${getStatusText(task.status)}
-            </button>
-            <button onclick="deleteTask('${task.id}'); closeDetailModal()" class="text-red-500 hover:bg-red-50 px-4 py-2 rounded-lg font-semibold">
-                Xóa Task
-            </button>
-        </div>
-    `;
-    
-    document.getElementById('detail-modal').classList.remove('hidden');
-};
-
-window.closeDetailModal = () => {
-    document.getElementById('detail-modal').classList.add('hidden');
-};
-
-window.toggleKeyResult = (taskId, krId) => {
-    const task = state.tasks.find(t => t.id === taskId);
-    if (!task) return;
-    
-    const kr = task.keyResults.find(k => k.id === krId);
-    if (kr) {
-        kr.completed = !kr.completed;
-        if (kr.completed) kr.completedAt = new Date().toISOString();
-    }
-    
-    // Auto update task status if all KRs completed
-    const allCompleted = task.keyResults.every(k => k.completed);
-    if (allCompleted && task.status !== 'Đã xong') {
-        task.status = 'Đã xong';
-    }
-    
-    renderTasks();
-    openTaskDetail(taskId);
-    saveState();
-};
-
-window.toggleTaskStatus = (taskId) => {
-    const task = state.tasks.find(t => t.id === taskId);
-    if (!task) return;
-    
-    const statusOrder = ['Chưa thực hiện', 'Đang thực hiện', 'Tạm ngưng', 'Đã xong'];
-    const currentIndex = statusOrder.indexOf(task.status);
-    task.status = statusOrder[(currentIndex + 1) % 4];
-    
-    renderTasks();
-    saveState();
-};
-
-window.deleteTask = (taskId) => {
-    if (confirm('Bạn có chắc muốn xóa task này?')) {
-        state.tasks = state.tasks.filter(t => t.id !== taskId);
-        renderTasks();
-        saveState();
-    }
-};
-
-window.filterTasks = (filter) => {
-    if (filter) state.currentFilter = filter;
-    
-    document.querySelectorAll('.filter-btn').forEach(btn => {
-        btn.classList.remove('active', 'bg-gray-200', 'text-gray-700');
-        if (btn.textContent.toLowerCase().includes(state.currentFilter)) {
-            btn.classList.add('active', 'bg-gray-200', 'text-gray-700');
-        }
-    });
-    
-    renderTasks();
-};
-
-function saveKanban() {
-    localStorage.setItem(STORAGE_KEYS.kanbanTasks, JSON.stringify(state.kanbanTasks));
+function canApprove(task) {
+  return state.currentUser && state.currentUser != task.assigneeId;
 }
 
-function getKanbanStatusMeta(status) {
-    switch (status) {
-        case 'progress':
-            return { label: 'Progress', dot: 'bg-blue-500', badge: 'bg-blue-100 text-blue-700' };
-        case 'review':
-            return { label: 'Review', dot: 'bg-purple-500', badge: 'bg-purple-100 text-purple-700' };
-        case 'done':
-            return { label: 'Done', dot: 'bg-green-500', badge: 'bg-green-100 text-green-700' };
-        default:
-            return { label: 'Todo', dot: 'bg-gray-400', badge: 'bg-gray-100 text-gray-700' };
-    }
-}
+function renderReviewButtons(task) {
+  if (!task.reviewedBy) {
+    task.reviewedBy = [];
+  }
 
-function renderKanban() {
-    if (!kanbanView) return;
+  const approved = task.reviewedBy.length > 0;
 
-    const empty = document.getElementById('kanban-empty');
-    const todoCol = document.getElementById('kanban-col-todo');
-    const progressCol = document.getElementById('kanban-col-progress');
-    const reviewCol = document.getElementById('kanban-col-review');
-    const doneCol = document.getElementById('kanban-col-done');
-
-    if (!todoCol || !progressCol || !reviewCol || !doneCol || !empty) return;
-
-    const tasks = state.kanbanTasks || [];
-    if (tasks.length === 0) {
-        empty.classList.remove('hidden');
-    } else {
-        empty.classList.add('hidden');
-    }
-
-    const byStatus = {
-        todo: tasks.filter(t => (t.status || 'todo') === 'todo'),
-        progress: tasks.filter(t => t.status === 'progress'),
-        review: tasks.filter(t => t.status === 'review'),
-        done: tasks.filter(t => t.status === 'done')
-    };
-
-    todoCol.innerHTML = byStatus.todo.map(t => renderKanbanCard(t)).join('');
-    progressCol.innerHTML = byStatus.progress.map(t => renderKanbanCard(t)).join('');
-    reviewCol.innerHTML = byStatus.review.map(t => renderKanbanCard(t)).join('');
-    doneCol.innerHTML = byStatus.done.map(t => renderKanbanCard(t)).join('');
-
-    document.getElementById('kanban-count-todo').textContent = byStatus.todo.length;
-    document.getElementById('kanban-count-progress').textContent = byStatus.progress.length;
-    document.getElementById('kanban-count-review').textContent = byStatus.review.length;
-    document.getElementById('kanban-count-done').textContent = byStatus.done.length;
-
-    document.getElementById('kanban-stat-total').textContent = tasks.length;
-    document.getElementById('kanban-stat-progress').textContent = byStatus.progress.length;
-    document.getElementById('kanban-stat-review').textContent = byStatus.review.length;
-    document.getElementById('kanban-stat-done').textContent = byStatus.done.length;
-
-    saveKanban();
-}
-
-function renderKanbanCard(task) {
-    const assignee = state.members.find(m => m.id == task.assigneeId);
-    const daysLeft = calculateDaysRemaining(task.deadline);
-    const meta = getKanbanStatusMeta(task.status);
-
-    const overdue = daysLeft !== null && daysLeft < 0 && task.status !== 'done';
-    const deadlineText = task.deadline ? formatDate(task.deadline) : 'Không có deadline';
-    const deadlineClass = overdue ? 'text-red-600 font-bold' : 'text-gray-500';
-
-    const prevDisabled = (task.status || 'todo') === 'todo';
-    const nextDisabled = task.status === 'done';
-
+  if (approved) {
+    const approver = state.members.find((m) => m.id == task.reviewedBy[0]);
     return `
-        <div class="bg-white rounded-xl border ${overdue ? 'border-red-300 bg-red-50' : 'border-gray-200'} shadow-sm p-4">
-            <div class="flex justify-between items-start gap-3 mb-3">
-                <div class="flex items-center gap-2">
-                    <span class="px-2 py-0.5 rounded text-xs font-semibold ${meta.badge}">${meta.label}</span>
-                    <span class="text-xs ${deadlineClass}">
-                        <i class="lucide-calendar text-xs mr-1"></i>${deadlineText}
-                    </span>
-                </div>
-                <div class="flex items-center gap-1">
-                    <button onclick="editKanbanTask('${task.id}')" class="text-gray-400 hover:text-indigo-600 p-1.5 hover:bg-indigo-50 rounded-lg transition-colors">
-                        <i class="lucide-pencil text-sm"></i>
-                    </button>
-                    <button onclick="deleteKanbanTask('${task.id}')" class="text-gray-400 hover:text-red-500 p-1.5 hover:bg-red-50 rounded-lg transition-colors">
-                        <i class="lucide-trash-2 text-sm"></i>
-                    </button>
-                </div>
-            </div>
-
-            <h4 class="font-bold text-gray-800 mb-1">${task.title}</h4>
-            <p class="text-sm text-gray-500 mb-3 line-clamp-2">${task.description || 'Không có mô tả'}</p>
-
-            <div class="flex items-center justify-between pt-3 border-t border-gray-100">
-                <div class="flex items-center gap-2">
-                    <div class="w-7 h-7 rounded-full ${assignee?.color || 'bg-gray-400'} text-white flex items-center justify-center text-xs font-bold">
-                        ${assignee?.avatar || '?'}
-                    </div>
-                    <span class="text-sm font-medium text-gray-700">${assignee?.name || 'Chưa gán'}</span>
-                </div>
-                <div class="flex items-center gap-2">
-                    <button onclick="moveKanbanTask('${task.id}', -1)" class="text-xs px-3 py-1.5 rounded-lg font-semibold ${prevDisabled ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}" ${prevDisabled ? 'disabled' : ''}>
-                        ‹ Prev
-                    </button>
-                    <button onclick="moveKanbanTask('${task.id}', 1)" class="text-xs px-3 py-1.5 rounded-lg font-semibold ${nextDisabled ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-indigo-600 text-white hover:bg-indigo-700'}" ${nextDisabled ? 'disabled' : ''}>
-                        Next ›
-                    </button>
-                </div>
-            </div>
-        </div>
+      <div class="flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
+        <i class="lucide-check-circle"></i>
+        Đã review bởi ${approver?.name || "someone"}
+      </div>
     `;
+  }
+
+  if (canApprove(task)) {
+    return `
+      <button onclick="approveTask('${task.id}')" class="px-3 py-1 bg-green-500 text-white text-xs font-semibold rounded hover:bg-green-600 transition-colors">
+        Approve
+      </button>
+    `;
+  }
+
+  return `
+    <span class="text-xs text-gray-500">Chờ người khác review</span>
+  `;
 }
 
-function openKanbanTaskModal(taskId = '') {
-    kanbanTaskIdInput.value = taskId;
-    const isEdit = !!taskId;
-    const task = state.kanbanTasks.find(t => t.id === taskId);
-
-    kanbanModalTitle.innerHTML = `<i class="lucide-kanban-square text-indigo-600"></i> ${isEdit ? 'Sửa Task Kanban' : 'Thêm Task Kanban'}`;
-    kanbanTaskTitleInput.value = task?.title || '';
-    kanbanTaskDescInput.value = task?.description || '';
-    kanbanTaskAssigneeSelect.value = task?.assigneeId ?? (state.members[0]?.id ?? '');
-    kanbanTaskDeadlineInput.value = task?.deadline || '';
-
-    kanbanModal.classList.remove('hidden');
-    kanbanTaskTitleInput.focus();
-}
-
-function closeKanbanTaskModal() {
-    kanbanModal.classList.add('hidden');
-    kanbanTaskForm.reset();
-    kanbanTaskIdInput.value = '';
-}
-
-window.editKanbanTask = (taskId) => openKanbanTaskModal(taskId);
-
-window.deleteKanbanTask = (taskId) => {
-    const task = state.kanbanTasks.find(t => t.id === taskId);
-    if (!task) return;
-    if (!confirm('Bạn có chắc muốn xóa task này?')) return;
-    state.kanbanTasks = state.kanbanTasks.filter(t => t.id !== taskId);
-    renderKanban();
-};
-
-window.moveKanbanTask = (taskId, dir) => {
-    const order = ['todo', 'progress', 'review', 'done'];
-    const task = state.kanbanTasks.find(t => t.id === taskId);
-    if (!task) return;
-    const current = task.status || 'todo';
-    const idx = order.indexOf(current);
-    const nextIdx = idx + dir;
-    if (nextIdx < 0 || nextIdx >= order.length) return;
-    task.status = order[nextIdx];
-    renderKanban();
-};
-
-// ============= STATS =============
-function updateStats() {
-    document.getElementById('stat-total').textContent = state.tasks.length;
-    document.getElementById('stat-p0').textContent = state.tasks.filter(t => t.priority === 'P0').length;
-    document.getElementById('stat-p1').textContent = state.tasks.filter(t => t.priority === 'P1').length;
-    document.getElementById('stat-progress').textContent = state.tasks.filter(t => t.status === 'Đang thực hiện').length;
-    document.getElementById('stat-done').textContent = state.tasks.filter(t => t.status === 'Đã xong').length;
-}
-
-// ============= LOCAL STORAGE =============
-function saveState() {
-    localStorage.setItem(STORAGE_KEYS.okrTasks, JSON.stringify(state.tasks));
-}
-
-// ============= EVENT LISTENERS =============
-function setupEventListeners() {
-    addTaskBtn.onclick = () => {
-        if (state.activeView === 'kanban') {
-            openKanbanTaskModal();
-            return;
-        }
-
-        document.getElementById('key-results-list').innerHTML = '';
-        addKeyResult('📖 Research & understand');
-        addKeyResult('📋 Create execution plan');
-        addKeyResult('⚡ Execute implementation');
-        addKeyResult('✅ Verify & finalize');
-        taskModal.classList.remove('hidden');
-        document.getElementById('task-title').focus();
-    };
-    
-    closeModalBtns.forEach(btn => btn.onclick = () => taskModal.classList.add('hidden'));
-    kanbanCloseModalBtns.forEach(btn => btn.onclick = () => closeKanbanTaskModal());
-    
-    window.addEventListener('click', (e) => {
-        if (e.target === taskModal) taskModal.classList.add('hidden');
-        if (e.target === kanbanModal) closeKanbanTaskModal();
-        if (e.target === membersModal) closeMembersModal();
-        if (e.target === document.getElementById('detail-modal')) closeDetailModal();
-    });
-
-    if (viewOkrBtn) viewOkrBtn.onclick = () => setActiveView('okr');
-    if (viewKanbanBtn) viewKanbanBtn.onclick = () => setActiveView('kanban');
-
-    if (membersBtn) membersBtn.onclick = () => openMembersModal();
-    if (closeMembersModalBtn) closeMembersModalBtn.onclick = () => closeMembersModal();
-    
-    taskForm.onsubmit = (e) => {
-        e.preventDefault();
-        
-        const keyResults = [];
-        document.querySelectorAll('#key-results-list > div').forEach(div => {
-            const checkbox = div.querySelector('input[type="checkbox"]');
-            const input = div.querySelector('input[type="text"]');
-            if (input.value.trim()) {
-                keyResults.push({
-                    id: checkbox.id,
-                    title: input.value.trim(),
-                    completed: checkbox.checked,
-                    completedAt: checkbox.checked ? new Date().toISOString() : null
-                });
-            }
-        });
-        
-        const newTask = {
-            id: Date.now().toString(),
-            title: document.getElementById('task-title').value,
-            description: document.getElementById('task-desc').value,
-            assigneeId: document.getElementById('task-assignee').value,
-            deadline: document.getElementById('task-deadline').value,
-            notes: document.getElementById('task-notes').value,
-            priority: calculatePriority(
-                document.getElementById('task-title').value,
-                document.getElementById('task-desc').value,
-                document.getElementById('task-deadline').value
-            ),
-            difficulty: calculateDifficulty(document.getElementById('task-desc').value),
-            status: 'Chưa thực hiện',
-            keyResults: keyResults.length > 0 ? keyResults : generateKeyResults(document.getElementById('task-desc').value),
-            createdAt: new Date().toISOString()
-        };
-        
-        state.tasks.push(newTask);
-        renderTasks();
-        taskForm.reset();
-        document.getElementById('auto-analysis').classList.add('hidden');
-        taskModal.classList.add('hidden');
-    };
-
-    memberForm.onsubmit = (e) => {
-        e.preventDefault();
-        const name = memberNameInput.value.trim();
-        if (!name) return;
-
-        const editingId = memberIdInput.value;
-        if (editingId) {
-            const member = state.members.find(m => m.id == editingId);
-            if (!member) return;
-            member.name = name;
-            member.avatar = makeAvatar(name);
-        } else {
-            const newMember = {
-                id: Date.now(),
-                name,
-                color: getNextMemberColor(),
-                avatar: makeAvatar(name)
-            };
-            state.members.push(newMember);
-        }
-
-        saveMembers();
-        renderMembers();
-        renderAssigneeFilter();
-        renderMembersList();
-        renderTasks();
-        renderKanban();
-        closeMembersModal();
-    };
-
-    kanbanTaskForm.onsubmit = (e) => {
-        e.preventDefault();
-        const title = kanbanTaskTitleInput.value.trim();
-        if (!title) return;
-
-        const id = kanbanTaskIdInput.value;
-        const existing = state.kanbanTasks.find(t => t.id === id);
-        if (existing) {
-            existing.title = title;
-            existing.description = kanbanTaskDescInput.value;
-            existing.assigneeId = kanbanTaskAssigneeSelect.value;
-            existing.deadline = kanbanTaskDeadlineInput.value;
-        } else {
-            state.kanbanTasks.push({
-                id: Date.now().toString(),
-                title,
-                description: kanbanTaskDescInput.value,
-                assigneeId: kanbanTaskAssigneeSelect.value,
-                deadline: kanbanTaskDeadlineInput.value,
-                status: 'todo',
-                createdAt: new Date().toISOString()
-            });
-        }
-
-        renderKanban();
-        closeKanbanTaskModal();
-    };
-    
-    // AI Panel Events
-    aiAssistantBtn.onclick = () => aiPanel.classList.remove('translate-x-full');
-    closeAiPanelBtn.onclick = () => aiPanel.classList.add('translate-x-full');
-    
-    sendAiBtn.onclick = () => handleAiChat();
-    aiInput.onkeypress = (e) => {
-        if (e.key === 'Enter') handleAiChat();
-    };
-}
-
-// ============= AI FEATURES =============
-window.aiAction = (type) => {
-    const titleInput = document.getElementById('task-title');
-    const descInput = document.getElementById('task-desc');
-    
-    if (type === 'optimize-title') {
-        if (!titleInput.value) return alert('Nhập tiêu đề trước!');
-        titleInput.value = '[OKR] ' + titleInput.value.charAt(0).toUpperCase() + titleInput.value.slice(1);
-    } else if (type === 'fix-grammar') {
-        if (!descInput.value) return alert('Nhập mô tả trước!');
-        descInput.value = descInput.value.replace(/\b(v[ií])\b/g, 'viết').replace(/\b(m[aà])\b/g, 'mà');
-    } else if (type === 'summarize') {
-        if (!descInput.value) return alert('Nhập mô tả trước!');
-        const text = descInput.value;
-        descInput.value = 'TÓM TẮT:\n' + text.substring(0, 100) + '...\n\n→ Cần thực hiện: ' + text.split('.').slice(0, 3).join('.');
-    } else if (type === 'breakdown') {
-        if (!descInput.value) return alert('Nhập mô tả trước!');
-        const krs = generateKeyResults(descInput.value);
-        document.getElementById('key-results-list').innerHTML = '';
-        krs.forEach(kr => addKeyResult(kr.title));
+function approveTask(taskId) {
+  const task = state.tasks.find((t) => t.id === taskId);
+  if (task && canApprove(task)) {
+    if (!task.reviewedBy) {
+      task.reviewedBy = [];
     }
+    task.reviewedBy.push(state.currentUser);
+    renderTasks();
+  }
+}
+
+// Event Listeners
+function setupEventListeners() {
+  // Task Modal
+  addTaskBtn.onclick = () => openTaskModal();
+  closeModalBtn.onclick = () => closeTaskModal();
+  taskForm.onsubmit = handleTaskSubmit;
+
+  // Member Modal
+  manageMembersBtn.onclick = () => openMemberModal();
+  closeMemberModalBtn.onclick = () => closeMemberModal();
+  memberForm.onsubmit = handleMemberSubmit;
+
+  // Dark Mode
+  darkModeBtn.onclick = () => {
+    state.darkMode = !state.darkMode;
+    applyDarkMode();
+    saveState();
+  };
+
+  // Export/Import
+  exportBtn.onclick = exportData;
+  importFile.onchange = importData;
+
+  // One Thing
+  oneThingBtn.onclick = toggleOneThingPanel;
+  closeOneThingBtn.onclick = toggleOneThingPanel;
+  oneThingForm.onsubmit = handleOneThingSubmit;
+  focusModeBtn.onclick = openFocusMode;
+  closeFocusModeBtn.onclick = closeFocusMode;
+
+  // AI Knowledge Manager
+  aiAssistantBtn.onclick = () => aiPanel.classList.remove("translate-x-full");
+  closeAiPanelBtn.onclick = () => aiPanel.classList.add("translate-x-full");
+  sendAiBtn.onclick = () => handleAiChat();
+  aiInput.onkeypress = (e) => {
+    if (e.key === "Enter") handleAiChat();
+  };
+
+  // Close modals on outside click
+  window.onclick = (e) => {
+    if (e.target === taskModal) closeTaskModal();
+    if (e.target === memberModal) closeMemberModal();
+    if (e.target === oneThingPanel) toggleOneThingPanel();
+    if (e.target === focusModeOverlay) closeFocusMode();
+  };
+}
+
+window.aiAction = (type) => {
+  const titleInput = document.getElementById("task-title");
+  const descInput = document.getElementById("task-desc");
+
+  const content = type === "optimize-title" ? titleInput.value : descInput.value;
+  if (!content) return alert("Vui lòng nhập nội dung trước khi dùng AI!");
+
+  if (type === "optimize-title") titleInput.value = "AI đang xử lý...";
+  else descInput.value = "AI đang xử lý nội dung...";
+
+  setTimeout(() => {
+    switch (type) {
+      case "optimize-title": {
+        const normalized =
+          content.length > 0
+            ? content.charAt(0).toUpperCase() + content.slice(1)
+            : content;
+        titleInput.value = `[3Musk] ${normalized}`;
+        break;
+      }
+      case "fix-grammar":
+        descInput.value = content
+          .replace(/SOP/g, "Standard Operating Procedure")
+          .replace(/brief/g, "Bản tóm tắt yêu cầu");
+        break;
+      case "summarize":
+        descInput.value = `Tóm tắt: ${content.substring(0, 80)}...`;
+        break;
+      case "rewrite-professional":
+        descInput.value = `Kính gửi team,\n\nTôi muốn cập nhật về task: ${content}.\n\nTrân trọng,\nMusketeer Bot`;
+        break;
+      default:
+        break;
+    }
+  }, 500);
 };
 
 function handleAiChat() {
-    const query = aiInput.value.trim();
-    if (!query) return;
+  const query = aiInput.value.trim();
+  if (!query) return;
 
-    appendChatMessage('user', query);
-    aiInput.value = '';
+  appendChatMessage("user", query);
+  aiInput.value = "";
 
-    setTimeout(() => {
-        let response = '';
-        const taskCount = state.tasks.length;
-        const p0Count = state.tasks.filter(t => t.priority === 'P0').length;
-        const progressCount = state.tasks.filter(t => t.status === 'Đang thực hiện').length;
-        const doneCount = state.tasks.filter(t => t.status === 'Đã xong').length;
-        
-        if (query.toLowerCase().includes('tổng quan') || query.toLowerCase().includes('status')) {
-            response = `📊 **Báo cáo Workspace:**\n\n• Tổng task: ${taskCount}\n• P0 (Gấp): ${p0Count}\n• Đang thực hiện: ${progressCount}\n• Đã hoàn thành: ${doneCount}\n\n${doneCount > 0 ? '🎉 Tiến độ chung: ' + Math.round((doneCount/taskCount)*100) + '%' : ''}`;
-        } else if (query.toLowerCase().includes('p0') || query.toLowerCase().includes('gấp')) {
-            const p0Tasks = state.tasks.filter(t => t.priority === 'P0');
-            response = p0Tasks.length > 0 
-                ? '⚠️ **Task P0 - Cần ưu tiên:**\n' + p0Tasks.map(t => '• [' + t.priority + '] ' + t.title).join('\n')
-                : '✅ Không có task P0 nào. Mọi thứ đang trong tầm kiểm soát!';
-        } else if (query.toLowerCase().includes('ai')) {
-            response = '🤖 Tôi có thể giúp bạn:\n• Phân tích tự động priority & difficulty\n• Tạo OKR breakdown cho task\n• Viết/sửa nội dung task\n\nChỉ cần nhấn các nút ✨ trong form tạo task!';
-        } else {
-            response = `Dựa trên phân tích workspace:\n\nTôi hiểu bạn hỏi về "${query}". Đây là bản demo AI - khi kết nối OpenAI/Claude API, tôi sẽ phân tích chi tiết hơn!`;
-        }
-        
-        appendChatMessage('ai', response);
-    }, 600);
+  setTimeout(() => {
+    const lower = query.toLowerCase();
+    const total = state.tasks.length;
+    const todoCount = state.tasks.filter((t) => t.status === "todo").length;
+    const progressCount = state.tasks.filter((t) => t.status === "progress").length;
+    const reviewCount = state.tasks.filter((t) => t.status === "review").length;
+    const doneCount = state.tasks.filter((t) => t.status === "done").length;
+
+    let response = "";
+    if (lower.includes("tổng quan") || lower.includes("status")) {
+      response = `Workspace có ${total} task (Todo: ${todoCount}, In Progress: ${progressCount}, Review: ${reviewCount}, Done: ${doneCount}).`;
+    } else if (lower.includes("one thing") || lower.includes("ưu tiên")) {
+      const oneThing = getOneThingPriority();
+      response = oneThing
+        ? `One Thing hôm nay: ${oneThing.title}${oneThing.deadline ? ` (hạn: ${formatDate(oneThing.deadline)})` : ""}.`
+        : "Hiện tại bạn chưa có task nào cần ưu tiên.";
+    } else if (lower.includes("ai writer") || lower.includes("viết")) {
+      response =
+        "Bạn có thể dùng AI Writer ngay trong form task: Optimize title, Fix Grammar, Summarize, Professional.";
+    } else {
+      response =
+        "Bạn có thể hỏi: “tổng quan workspace”, “one thing hôm nay”, hoặc “task của tôi?”.";
+    }
+
+    appendChatMessage("ai", response);
+  }, 300);
 }
 
 function appendChatMessage(role, text) {
-    const msg = document.createElement('div');
-    msg.className = role === 'ai' 
-        ? 'bg-white p-4 rounded-lg shadow-sm text-sm border border-purple-100' 
-        : 'bg-indigo-600 text-white p-4 rounded-lg shadow-sm text-sm ml-8';
-    msg.innerHTML = text.replace(/\n/g, '<br>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-    aiChatHistory.appendChild(msg);
-    aiChatHistory.scrollTop = aiChatHistory.scrollHeight;
+  const msg = document.createElement("div");
+  msg.className =
+    role === "ai"
+      ? "bg-white dark:bg-gray-800 p-3 rounded-lg shadow-sm text-sm border border-purple-100 dark:border-gray-700 text-gray-900 dark:text-white"
+      : "bg-indigo-600 text-white p-3 rounded-lg shadow-sm text-sm ml-8";
+  msg.textContent = text;
+  aiChatHistory.appendChild(msg);
+  aiChatHistory.scrollTop = aiChatHistory.scrollHeight;
 }
 
-// ============= START =============
+// ----------------------
+// One Thing Functions
+// ----------------------
+
+function toggleOneThingPanel() {
+  oneThingPanel.classList.toggle("hidden");
+  if (
+    !oneThingPanel.classList.contains("hidden") &&
+    oneThingMessages.children.length === 0
+  ) {
+    renderWelcomeMessage();
+  }
+}
+
+function renderWelcomeMessage() {
+  const message = {
+    type: "bot",
+    text: `Xin chào! Tôi là One Thing Assistant! Hãy hỏi tôi:
+- "hôm nay làm gì?" để xem task ưu tiên nhất
+- "task của tôi?" để xem tất cả task của bạn
+- "team ra sao?" để xem tổng quan team`,
+  };
+  addOneThingMessage(message);
+}
+
+function addOneThingMessage(message) {
+  const messageEl = document.createElement("div");
+  messageEl.className = `flex gap-3 ${message.type === "user" ? "justify-end" : "justify-start"}`;
+  messageEl.innerHTML = `
+    <div class="max-w-[80%] p-3 rounded-2xl ${
+      message.type === "user"
+        ? "bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-br-sm"
+        : "bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white rounded-bl-sm"
+    }">
+      <p class="text-sm whitespace-pre-wrap">${message.text}</p>
+    </div>
+  `;
+  oneThingMessages.appendChild(messageEl);
+  oneThingMessages.scrollTop = oneThingMessages.scrollHeight;
+}
+
+function handleOneThingSubmit(e) {
+  e.preventDefault();
+  const query = oneThingInput.value.trim();
+  if (!query) return;
+
+  // Add user message
+  addOneThingMessage({ type: "user", text: query });
+  oneThingInput.value = "";
+
+  // Process query
+  setTimeout(() => {
+    const response = processOneThingQuery(query);
+    addOneThingMessage({ type: "bot", text: response });
+  }, 300);
+}
+
+function getCurrentUserTasks() {
+  return state.tasks.filter(
+    (t) => t.assigneeId == state.currentUser && t.status !== "done",
+  );
+}
+
+function getOneThingPriority() {
+  const userTasks = getCurrentUserTasks();
+  if (userTasks.length === 0) return null;
+
+  // Sort by deadline (earliest first), then by status (progress > review > todo)
+  const statusOrder = { progress: 0, review: 1, todo: 2 };
+  return userTasks.sort((a, b) => {
+    // First compare deadlines
+    if (a.deadline && b.deadline) {
+      return new Date(a.deadline) - new Date(b.deadline);
+    }
+    if (a.deadline) return -1;
+    if (b.deadline) return 1;
+
+    // Then compare status
+    return statusOrder[a.status] - statusOrder[b.status];
+  })[0];
+}
+
+function processOneThingQuery(query) {
+  const lowerQuery = query.toLowerCase();
+
+  if (
+    lowerQuery.includes("hôm nay") ||
+    lowerQuery.includes("today") ||
+    lowerQuery.includes("one thing")
+  ) {
+    const oneThing = getOneThingPriority();
+    if (!oneThing) {
+      return "Chúc mừng! Bạn không còn task nào chưa hoàn thành! 🎉";
+    }
+    const assignee = state.members.find((m) => m.id == oneThing.assigneeId);
+    return `✨ **One Thing Today** ✨
+
+**${oneThing.title}**
+${oneThing.description ? `- ${oneThing.description}` : ""}
+- Người thực hiện: ${assignee?.name || "Unassigned"}
+${oneThing.deadline ? `- Hạn nộp: ${formatDate(oneThing.deadline)}` : ""}
+- Trạng thái: ${getStatusText(oneThing.status)}`;
+  }
+
+  if (lowerQuery.includes("task của tôi") || lowerQuery.includes("my tasks")) {
+    const myTasks = getCurrentUserTasks();
+    if (myTasks.length === 0) {
+      return "Bạn không có task nào! 🎉";
+    }
+    return `📋 **Your Tasks** (${myTasks.length})
+
+${myTasks
+  .map(
+    (task, idx) =>
+      `${idx + 1}. ${task.title} [${getStatusText(task.status)}]${
+        task.deadline ? ` - ${formatDate(task.deadline)}` : ""
+      }`,
+  )
+  .join("\n")}`;
+  }
+
+  if (lowerQuery.includes("team") || lowerQuery.includes("team ra sao")) {
+    const statusCounts = { todo: 0, progress: 0, review: 0, done: 0 };
+    state.tasks.forEach((t) => statusCounts[t.status]++);
+
+    return `👥 **Team Overview**
+
+- Tổng tasks: ${state.tasks.length}
+- Cần làm: ${statusCounts.todo}
+- Đang làm: ${statusCounts.progress}
+- Đang review: ${statusCounts.review}
+- Hoàn thành: ${statusCounts.done}
+
+Thành viên:
+${state.members.map((m) => `- ${m.name}`).join("\n")}`;
+  }
+
+  return "Xin lỗi, tôi không hiểu câu hỏi! Hãy thử hỏi: 'hôm nay làm gì?' hoặc 'task của tôi?'";
+}
+
+function openFocusMode() {
+  const oneThing = getOneThingPriority();
+  if (!oneThing) {
+    alert("Bạn không có task nào để focus!");
+    return;
+  }
+
+  const assignee = state.members.find((m) => m.id == oneThing.assigneeId);
+  const isOverdue =
+    oneThing.deadline &&
+    new Date(oneThing.deadline) < new Date() &&
+    oneThing.status !== "done";
+
+  focusModeTask.innerHTML = `
+    <div class="bg-gradient-to-r from-indigo-500/10 to-purple-500/10 p-6 rounded-xl border border-indigo-200 dark:border-indigo-800">
+      <div class="flex justify-between items-start mb-4">
+        <span class="text-xs font-bold px-2 py-0.5 rounded uppercase tracking-wider ${getStatusColor(oneThing.status)}">
+          ${getStatusText(oneThing.status)}
+        </span>
+      </div>
+      <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-3">${oneThing.title}</h3>
+      ${
+        oneThing.description
+          ? `<p class="text-gray-600 dark:text-gray-300 mb-4">${oneThing.description}</p>`
+          : ""
+      }
+      <div class="flex items-center gap-2 mb-4">
+        <div class="w-8 h-8 rounded-full ${assignee?.color || "bg-gray-400"} text-white flex items-center justify-center text-xs font-bold">
+          ${assignee?.avatar || "?"}
+        </div>
+        <span class="text-sm text-gray-600 dark:text-gray-300 font-medium">${assignee?.name || "Unassigned"}</span>
+      </div>
+      ${
+        oneThing.deadline
+          ? `
+        <div class="flex items-center gap-2 text-sm ${isOverdue ? "text-red-500 font-medium" : "text-gray-600 dark:text-gray-300"}">
+          <i class="lucide-calendar"></i>
+          ${formatDate(oneThing.deadline)}
+        </div>
+      `
+          : ""
+      }
+    </div>
+  `;
+  focusModeOverlay.classList.remove("hidden");
+}
+
+function closeFocusMode() {
+  focusModeOverlay.classList.add("hidden");
+}
+
+function openTaskModal(task = null) {
+  const modalTitle = document.getElementById("task-modal-title");
+  const submitBtn = document.getElementById("task-submit-btn");
+  const taskIdInput = document.getElementById("task-id");
+  const titleInput = document.getElementById("task-title");
+  const descInput = document.getElementById("task-desc");
+  const assigneeInput = document.getElementById("task-assignee");
+  const deadlineInput = document.getElementById("task-deadline");
+
+  if (task) {
+    modalTitle.textContent = "Chỉnh sửa Task";
+    submitBtn.textContent = "Lưu";
+    taskIdInput.value = task.id;
+    titleInput.value = task.title;
+    descInput.value = task.description || "";
+    assigneeInput.value = task.assigneeId;
+    deadlineInput.value = task.deadline || "";
+  } else {
+    modalTitle.textContent = "Thêm Task mới";
+    submitBtn.textContent = "Tạo Task";
+    taskForm.reset();
+  }
+
+  taskModal.classList.remove("hidden");
+}
+
+function closeTaskModal() {
+  taskModal.classList.add("hidden");
+  taskForm.reset();
+}
+
+function handleTaskSubmit(e) {
+  e.preventDefault();
+
+  const taskId = document.getElementById("task-id").value;
+  const title = document.getElementById("task-title").value;
+  const description = document.getElementById("task-desc").value;
+  const assigneeId = document.getElementById("task-assignee").value;
+  const deadline = document.getElementById("task-deadline").value;
+
+  if (taskId) {
+    // Edit existing task
+    const task = state.tasks.find((t) => t.id === taskId);
+    if (task) {
+      task.title = title;
+      task.description = description;
+      task.assigneeId = assigneeId;
+      task.deadline = deadline;
+    }
+  } else {
+    // Create new task
+    const newTask = {
+      id: Date.now().toString(),
+      title,
+      description,
+      assigneeId,
+      deadline,
+      status: "todo",
+      createdAt: new Date().toISOString(),
+      reviewedBy: [],
+    };
+    state.tasks.push(newTask);
+  }
+
+  renderTasks();
+  closeTaskModal();
+}
+
+function openMemberModal(member = null) {
+  const submitBtn = document.getElementById("member-submit-btn");
+  const memberIdInput = document.getElementById("member-id");
+  const nameInput = document.getElementById("member-name");
+
+  if (member) {
+    submitBtn.textContent = "Lưu";
+    memberIdInput.value = member.id;
+    nameInput.value = member.name;
+  } else {
+    submitBtn.textContent = "Thêm thành viên";
+    memberForm.reset();
+  }
+
+  memberModal.classList.remove("hidden");
+}
+
+function closeMemberModal() {
+  memberModal.classList.add("hidden");
+  memberForm.reset();
+}
+
+function handleMemberSubmit(e) {
+  e.preventDefault();
+
+  const memberId = document.getElementById("member-id").value;
+  const name = document.getElementById("member-name").value;
+  const avatar = name.charAt(0).toUpperCase();
+
+  if (memberId) {
+    // Edit existing member
+    const member = state.members.find((m) => m.id == memberId);
+    if (member) {
+      member.name = name;
+      member.avatar = avatar;
+    }
+  } else {
+    // Create new member
+    const colorIndex = state.members.length % colors.length;
+    const newMember = {
+      id: Date.now(),
+      name,
+      avatar,
+      color: colors[colorIndex],
+    };
+    state.members.push(newMember);
+  }
+
+  renderMembers();
+  renderTasks();
+  closeMemberModal();
+}
+
+// Window Functions
+window.editTask = (taskId) => {
+  const task = state.tasks.find((t) => t.id === taskId);
+  if (task) {
+    openTaskModal(task);
+  }
+};
+
+window.updateTaskStatus = (taskId, direction) => {
+  const task = state.tasks.find((t) => t.id === taskId);
+  const statuses = ["todo", "progress", "review", "done"];
+  const currentIndex = statuses.indexOf(task.status);
+
+  if (direction === "next") {
+    // Check if trying to move from review to done without approval
+    if (
+      task.status === "review" &&
+      (!task.reviewedBy || task.reviewedBy.length === 0)
+    ) {
+      alert("Task cần được review trước khi hoàn thành!");
+      return;
+    }
+    if (currentIndex < statuses.length - 1) {
+      task.status = statuses[currentIndex + 1];
+    }
+  } else if (direction === "prev" && currentIndex > 0) {
+    task.status = statuses[currentIndex - 1];
+  }
+
+  renderTasks();
+};
+
+window.deleteTask = (taskId) => {
+  if (confirm("Bạn có chắc chắn muốn xóa task này?")) {
+    state.tasks = state.tasks.filter((t) => t.id !== taskId);
+    renderTasks();
+  }
+};
+
+window.editMember = (memberId) => {
+  const member = state.members.find((m) => m.id === memberId);
+  if (member) {
+    openMemberModal(member);
+  }
+};
+
+window.deleteMember = (memberId) => {
+  if (state.members.length <= 1) {
+    alert("Cần ít nhất 1 thành viên!");
+    return;
+  }
+  if (confirm("Bạn có chắc chắn muốn xóa thành viên này?")) {
+    state.members = state.members.filter((m) => m.id !== memberId);
+    // If deleted user was current user, pick another
+    if (state.currentUser === memberId && state.members.length > 0) {
+      state.currentUser = state.members[0].id;
+    }
+    renderMembers();
+    renderTasks();
+  }
+};
+
+window.selectUser = (userId) => {
+  state.currentUser = userId;
+  renderTasks();
+  const user = state.members.find((m) => m.id === userId);
+  alert(`Đã chọn ${user?.name} làm người dùng hiện tại`);
+};
+
+function exportData() {
+  const data = {
+    members: state.members,
+    tasks: state.tasks,
+    exportedAt: new Date().toISOString(),
+  };
+
+  const blob = new Blob([JSON.stringify(data, null, 2)], {
+    type: "application/json",
+  });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "3musk-backup.json";
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function importData(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = (event) => {
+    try {
+      const data = JSON.parse(event.target.result);
+      if (data.members && data.tasks) {
+        state.members = data.members;
+        state.tasks = data.tasks;
+        renderMembers();
+        renderTasks();
+        alert("Dữ liệu đã được import thành công!");
+      } else {
+        alert("File không hợp lệ!");
+      }
+    } catch (err) {
+      alert("Lỗi khi đọc file!");
+    }
+  };
+  reader.readAsText(file);
+  e.target.value = "";
+}
+
+// Start
 init();
