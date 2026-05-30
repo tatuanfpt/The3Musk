@@ -1292,6 +1292,12 @@ function processWorkspaceQuery(query) {
   const q = normalizeForNlp(query ?? "");
   const counts = computeStatusCounts();
 
+  if (q.includes("roi") || q.includes("tiet kiem") || q.includes("impact")) {
+    const active = counts.todo + counts.progress + counts.review;
+    const estSavedMinPerDay = Math.min(45, 6 + active * 2);
+    return `Business Impact (ước tính demo):\n- Active tasks: ${active}\n- Giảm thời gian hỏi/đồng bộ (standup/status): ~${estSavedMinPerDay} phút/ngày/người\n- Giảm lỗi quy trình: BR-03 (review trước Done) giúp giảm “done ảo”\n\nGợi ý: hỏi “tổng quan/status”, “task quá hạn”, hoặc “Tuấn đang có task gì” để xem luồng.`;
+  }
+
   if (lower.includes("okr")) {
     if (!state.okrs || state.okrs.length === 0) {
       return "Hiện chưa có OKR nào. Bạn có thể bấm “Thêm OKR” để tạo Objective và Key Results.";
@@ -1656,7 +1662,10 @@ ${oneThing.deadline ? `- Hạn nộp: ${formatDate(oneThing.deadline)}` : ""}
   const hasTaskWord = q.includes("task") || q.includes("cong viec");
   if (
     member &&
-    (hasTaskWord || q.includes("dang co") || q.includes("hien tai"))
+    (hasTaskWord ||
+      q.includes("dang co") ||
+      q.includes("hien tai") ||
+      q.includes("hien"))
   ) {
     const includeDone = q.includes("tat ca") || q.includes("all");
     const base = state.tasks.filter((t) => t.assigneeId == member.id);
