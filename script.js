@@ -1,11 +1,62 @@
 // State Management
+const STORAGE_KEYS = {
+    members: '3musk_members',
+    okrTasks: '3musk_okr_tasks',
+    kanbanTasks: '3musk_kanban_tasks',
+    activeView: '3musk_active_view'
+};
+
+const MEMBER_COLORS = [
+    'bg-red-500',
+    'bg-blue-500',
+    'bg-green-500',
+    'bg-purple-500',
+    'bg-orange-500',
+    'bg-pink-500',
+    'bg-teal-500',
+    'bg-indigo-500'
+];
+
+function makeAvatar(name) {
+    const cleaned = (name || '').trim();
+    if (!cleaned) return '?';
+    const parts = cleaned.split(/\s+/).filter(Boolean);
+    if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+    return cleaned.slice(0, 2).toUpperCase();
+}
+
+function getNextMemberColor() {
+    const used = new Set((state?.members || []).map(m => m.color));
+    const available = MEMBER_COLORS.find(c => !used.has(c));
+    return available || MEMBER_COLORS[(state.members.length || 0) % MEMBER_COLORS.length];
+}
+
+function loadMembers() {
+    const raw = localStorage.getItem(STORAGE_KEYS.members);
+    if (!raw) return null;
+    try {
+        const parsed = JSON.parse(raw);
+        if (!Array.isArray(parsed) || parsed.length === 0) return null;
+        return parsed.map(m => ({
+            id: m.id,
+            name: m.name,
+            color: m.color || 'bg-gray-500',
+            avatar: m.avatar || makeAvatar(m.name)
+        })).filter(m => m.id != null && m.name);
+    } catch {
+        return null;
+    }
+}
+
 let state = {
-    members: [
+    members: loadMembers() || [
         { id: 1, name: 'Athos', color: 'bg-red-500', avatar: 'A' },
         { id: 2, name: 'Porthos', color: 'bg-blue-500', avatar: 'P' },
         { id: 3, name: 'Aramis', color: 'bg-green-500', avatar: 'Ar' }
     ],
-    tasks: JSON.parse(localStorage.getItem('3musk_okr_tasks')) || [],
+    tasks: JSON.parse(localStorage.getItem(STORAGE_KEYS.okrTasks)) || [],
+    kanbanTasks: JSON.parse(localStorage.getItem(STORAGE_KEYS.kanbanTasks)) || [],
+    activeView: localStorage.getItem(STORAGE_KEYS.activeView) || 'okr',
     currentFilter: 'all'
 };
 
@@ -22,12 +73,36 @@ const closeAiPanelBtn = document.getElementById('close-ai-panel');
 const aiInput = document.getElementById('ai-input');
 const sendAiBtn = document.getElementById('send-ai-query');
 const aiChatHistory = document.getElementById('ai-chat-history');
+const viewOkrBtn = document.getElementById('view-okr-btn');
+const viewKanbanBtn = document.getElementById('view-kanban-btn');
+const okrView = document.getElementById('okr-view');
+const kanbanView = document.getElementById('kanban-view');
+const membersBtn = document.getElementById('members-btn');
+const membersModal = document.getElementById('members-modal');
+const closeMembersModalBtn = document.getElementById('close-members-modal');
+const memberForm = document.getElementById('member-form');
+const memberIdInput = document.getElementById('member-id');
+const memberNameInput = document.getElementById('member-name');
+const membersList = document.getElementById('members-list');
+const kanbanModal = document.getElementById('kanban-task-modal');
+const kanbanModalTitle = document.getElementById('kanban-modal-title');
+const kanbanTaskForm = document.getElementById('kanban-task-form');
+const kanbanCloseModalBtns = [document.getElementById('close-kanban-modal'), document.getElementById('close-kanban-modal-2')];
+const kanbanTaskIdInput = document.getElementById('kanban-task-id');
+const kanbanTaskTitleInput = document.getElementById('kanban-task-title');
+const kanbanTaskDescInput = document.getElementById('kanban-task-desc');
+const kanbanTaskAssigneeSelect = document.getElementById('kanban-task-assignee');
+const kanbanTaskDeadlineInput = document.getElementById('kanban-task-deadline');
 
 // Initialize
 function init() {
+    saveMembers();
     renderMembers();
     renderTasks();
     renderAssigneeFilter();
+    renderMembersList();
+    applyActiveView();
+    renderKanban();
     setupEventListeners();
     setupAutoAnalysis();
 }
@@ -43,6 +118,12 @@ function renderMembers() {
     taskAssigneeSelect.innerHTML = state.members.map(m => `
         <option value="${m.id}">${m.name}</option>
     `).join('');
+
+    if (kanbanTaskAssigneeSelect) {
+        kanbanTaskAssigneeSelect.innerHTML = state.members.map(m => `
+            <option value="${m.id}">${m.name}</option>
+        `).join('');
+    }
 }
 
 function renderAssigneeFilter() {
@@ -50,6 +131,103 @@ function renderAssigneeFilter() {
     filter.innerHTML = '<option value="">Tất cả thành viên</option>' + 
         state.members.map(m => `<option value="${m.id}">${m.name}</option>`).join('');
 }
+
+function setActiveView(view) {
+    state.activeView = view;
+    localStorage.setItem(STORAGE_KEYS.activeView, view);
+    applyActiveView();
+}
+
+function applyActiveView() {
+    const isKanban = state.activeView === 'kanban';
+    if (okrView) okrView.classList.toggle('hidden', isKanban);
+    if (kanbanView) kanbanView.classList.toggle('hidden', !isKanban);
+
+    if (viewOkrBtn) {
+        viewOkrBtn.classList.toggle('bg-white', !isKanban);
+        viewOkrBtn.classList.toggle('shadow-sm', !isKanban);
+        viewOkrBtn.classList.toggle('text-gray-800', !isKanban);
+        viewOkrBtn.classList.toggle('text-gray-600', isKanban);
+    }
+    if (viewKanbanBtn) {
+        viewKanbanBtn.classList.toggle('bg-white', isKanban);
+        viewKanbanBtn.classList.toggle('shadow-sm', isKanban);
+        viewKanbanBtn.classList.toggle('text-gray-800', isKanban);
+        viewKanbanBtn.classList.toggle('text-gray-600', !isKanban);
+    }
+
+    renderMembers();
+    renderTasks();
+    renderKanban();
+}
+
+function saveMembers() {
+    localStorage.setItem(STORAGE_KEYS.members, JSON.stringify(state.members));
+}
+
+function openMembersModal(memberId = '') {
+    memberIdInput.value = memberId;
+    const member = state.members.find(m => m.id == memberId);
+    memberNameInput.value = member ? member.name : '';
+    membersModal.classList.remove('hidden');
+    memberNameInput.focus();
+}
+
+function closeMembersModal() {
+    membersModal.classList.add('hidden');
+    memberForm.reset();
+    memberIdInput.value = '';
+}
+
+function renderMembersList() {
+    membersList.innerHTML = state.members.map(m => `
+        <div class="px-4 py-3 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="w-9 h-9 rounded-full ${m.color} text-white flex items-center justify-center text-xs font-bold shadow-sm">
+                    ${m.avatar}
+                </div>
+                <div>
+                    <p class="font-semibold text-sm text-gray-800">${m.name}</p>
+                    <p class="text-xs text-gray-400">ID: ${m.id}</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-2">
+                <button type="button" onclick="editMember('${m.id}')" class="text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 p-2 rounded-lg transition-colors">
+                    <i class="lucide-pencil text-sm"></i>
+                </button>
+                <button type="button" onclick="deleteMember('${m.id}')" class="text-gray-500 hover:text-red-600 hover:bg-red-50 p-2 rounded-lg transition-colors">
+                    <i class="lucide-trash-2 text-sm"></i>
+                </button>
+            </div>
+        </div>
+    `).join('');
+}
+
+window.editMember = (memberId) => openMembersModal(memberId);
+
+window.deleteMember = (memberId) => {
+    if (state.members.length <= 1) {
+        alert('Không thể xóa thành viên cuối cùng.');
+        return;
+    }
+    const member = state.members.find(m => m.id == memberId);
+    if (!member) return;
+    if (!confirm(`Xóa thành viên "${member.name}"?`)) return;
+
+    const remaining = state.members.filter(m => m.id != memberId);
+    const fallbackId = remaining[0]?.id;
+    state.members = remaining;
+    if (fallbackId != null) {
+        state.tasks.forEach(t => { if (t.assigneeId == memberId) t.assigneeId = fallbackId; });
+        state.kanbanTasks.forEach(t => { if (t.assigneeId == memberId) t.assigneeId = fallbackId; });
+    }
+    saveMembers();
+    renderMembers();
+    renderAssigneeFilter();
+    renderMembersList();
+    renderTasks();
+    renderKanban();
+};
 
 // ============= OKR LOGIC =============
 // Auto calculate Priority based on deadline and keywords
@@ -456,6 +634,163 @@ window.filterTasks = (filter) => {
     renderTasks();
 };
 
+function saveKanban() {
+    localStorage.setItem(STORAGE_KEYS.kanbanTasks, JSON.stringify(state.kanbanTasks));
+}
+
+function getKanbanStatusMeta(status) {
+    switch (status) {
+        case 'progress':
+            return { label: 'Progress', dot: 'bg-blue-500', badge: 'bg-blue-100 text-blue-700' };
+        case 'review':
+            return { label: 'Review', dot: 'bg-purple-500', badge: 'bg-purple-100 text-purple-700' };
+        case 'done':
+            return { label: 'Done', dot: 'bg-green-500', badge: 'bg-green-100 text-green-700' };
+        default:
+            return { label: 'Todo', dot: 'bg-gray-400', badge: 'bg-gray-100 text-gray-700' };
+    }
+}
+
+function renderKanban() {
+    if (!kanbanView) return;
+
+    const empty = document.getElementById('kanban-empty');
+    const todoCol = document.getElementById('kanban-col-todo');
+    const progressCol = document.getElementById('kanban-col-progress');
+    const reviewCol = document.getElementById('kanban-col-review');
+    const doneCol = document.getElementById('kanban-col-done');
+
+    if (!todoCol || !progressCol || !reviewCol || !doneCol || !empty) return;
+
+    const tasks = state.kanbanTasks || [];
+    if (tasks.length === 0) {
+        empty.classList.remove('hidden');
+    } else {
+        empty.classList.add('hidden');
+    }
+
+    const byStatus = {
+        todo: tasks.filter(t => (t.status || 'todo') === 'todo'),
+        progress: tasks.filter(t => t.status === 'progress'),
+        review: tasks.filter(t => t.status === 'review'),
+        done: tasks.filter(t => t.status === 'done')
+    };
+
+    todoCol.innerHTML = byStatus.todo.map(t => renderKanbanCard(t)).join('');
+    progressCol.innerHTML = byStatus.progress.map(t => renderKanbanCard(t)).join('');
+    reviewCol.innerHTML = byStatus.review.map(t => renderKanbanCard(t)).join('');
+    doneCol.innerHTML = byStatus.done.map(t => renderKanbanCard(t)).join('');
+
+    document.getElementById('kanban-count-todo').textContent = byStatus.todo.length;
+    document.getElementById('kanban-count-progress').textContent = byStatus.progress.length;
+    document.getElementById('kanban-count-review').textContent = byStatus.review.length;
+    document.getElementById('kanban-count-done').textContent = byStatus.done.length;
+
+    document.getElementById('kanban-stat-total').textContent = tasks.length;
+    document.getElementById('kanban-stat-progress').textContent = byStatus.progress.length;
+    document.getElementById('kanban-stat-review').textContent = byStatus.review.length;
+    document.getElementById('kanban-stat-done').textContent = byStatus.done.length;
+
+    saveKanban();
+}
+
+function renderKanbanCard(task) {
+    const assignee = state.members.find(m => m.id == task.assigneeId);
+    const daysLeft = calculateDaysRemaining(task.deadline);
+    const meta = getKanbanStatusMeta(task.status);
+
+    const overdue = daysLeft !== null && daysLeft < 0 && task.status !== 'done';
+    const deadlineText = task.deadline ? formatDate(task.deadline) : 'Không có deadline';
+    const deadlineClass = overdue ? 'text-red-600 font-bold' : 'text-gray-500';
+
+    const prevDisabled = (task.status || 'todo') === 'todo';
+    const nextDisabled = task.status === 'done';
+
+    return `
+        <div class="bg-white rounded-xl border ${overdue ? 'border-red-300 bg-red-50' : 'border-gray-200'} shadow-sm p-4">
+            <div class="flex justify-between items-start gap-3 mb-3">
+                <div class="flex items-center gap-2">
+                    <span class="px-2 py-0.5 rounded text-xs font-semibold ${meta.badge}">${meta.label}</span>
+                    <span class="text-xs ${deadlineClass}">
+                        <i class="lucide-calendar text-xs mr-1"></i>${deadlineText}
+                    </span>
+                </div>
+                <div class="flex items-center gap-1">
+                    <button onclick="editKanbanTask('${task.id}')" class="text-gray-400 hover:text-indigo-600 p-1.5 hover:bg-indigo-50 rounded-lg transition-colors">
+                        <i class="lucide-pencil text-sm"></i>
+                    </button>
+                    <button onclick="deleteKanbanTask('${task.id}')" class="text-gray-400 hover:text-red-500 p-1.5 hover:bg-red-50 rounded-lg transition-colors">
+                        <i class="lucide-trash-2 text-sm"></i>
+                    </button>
+                </div>
+            </div>
+
+            <h4 class="font-bold text-gray-800 mb-1">${task.title}</h4>
+            <p class="text-sm text-gray-500 mb-3 line-clamp-2">${task.description || 'Không có mô tả'}</p>
+
+            <div class="flex items-center justify-between pt-3 border-t border-gray-100">
+                <div class="flex items-center gap-2">
+                    <div class="w-7 h-7 rounded-full ${assignee?.color || 'bg-gray-400'} text-white flex items-center justify-center text-xs font-bold">
+                        ${assignee?.avatar || '?'}
+                    </div>
+                    <span class="text-sm font-medium text-gray-700">${assignee?.name || 'Chưa gán'}</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button onclick="moveKanbanTask('${task.id}', -1)" class="text-xs px-3 py-1.5 rounded-lg font-semibold ${prevDisabled ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}" ${prevDisabled ? 'disabled' : ''}>
+                        ‹ Prev
+                    </button>
+                    <button onclick="moveKanbanTask('${task.id}', 1)" class="text-xs px-3 py-1.5 rounded-lg font-semibold ${nextDisabled ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-indigo-600 text-white hover:bg-indigo-700'}" ${nextDisabled ? 'disabled' : ''}>
+                        Next ›
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function openKanbanTaskModal(taskId = '') {
+    kanbanTaskIdInput.value = taskId;
+    const isEdit = !!taskId;
+    const task = state.kanbanTasks.find(t => t.id === taskId);
+
+    kanbanModalTitle.innerHTML = `<i class="lucide-kanban-square text-indigo-600"></i> ${isEdit ? 'Sửa Task Kanban' : 'Thêm Task Kanban'}`;
+    kanbanTaskTitleInput.value = task?.title || '';
+    kanbanTaskDescInput.value = task?.description || '';
+    kanbanTaskAssigneeSelect.value = task?.assigneeId ?? (state.members[0]?.id ?? '');
+    kanbanTaskDeadlineInput.value = task?.deadline || '';
+
+    kanbanModal.classList.remove('hidden');
+    kanbanTaskTitleInput.focus();
+}
+
+function closeKanbanTaskModal() {
+    kanbanModal.classList.add('hidden');
+    kanbanTaskForm.reset();
+    kanbanTaskIdInput.value = '';
+}
+
+window.editKanbanTask = (taskId) => openKanbanTaskModal(taskId);
+
+window.deleteKanbanTask = (taskId) => {
+    const task = state.kanbanTasks.find(t => t.id === taskId);
+    if (!task) return;
+    if (!confirm('Bạn có chắc muốn xóa task này?')) return;
+    state.kanbanTasks = state.kanbanTasks.filter(t => t.id !== taskId);
+    renderKanban();
+};
+
+window.moveKanbanTask = (taskId, dir) => {
+    const order = ['todo', 'progress', 'review', 'done'];
+    const task = state.kanbanTasks.find(t => t.id === taskId);
+    if (!task) return;
+    const current = task.status || 'todo';
+    const idx = order.indexOf(current);
+    const nextIdx = idx + dir;
+    if (nextIdx < 0 || nextIdx >= order.length) return;
+    task.status = order[nextIdx];
+    renderKanban();
+};
+
 // ============= STATS =============
 function updateStats() {
     document.getElementById('stat-total').textContent = state.tasks.length;
@@ -467,12 +802,17 @@ function updateStats() {
 
 // ============= LOCAL STORAGE =============
 function saveState() {
-    localStorage.setItem('3musk_okr_tasks', JSON.stringify(state.tasks));
+    localStorage.setItem(STORAGE_KEYS.okrTasks, JSON.stringify(state.tasks));
 }
 
 // ============= EVENT LISTENERS =============
 function setupEventListeners() {
     addTaskBtn.onclick = () => {
+        if (state.activeView === 'kanban') {
+            openKanbanTaskModal();
+            return;
+        }
+
         document.getElementById('key-results-list').innerHTML = '';
         addKeyResult('📖 Research & understand');
         addKeyResult('📋 Create execution plan');
@@ -483,11 +823,20 @@ function setupEventListeners() {
     };
     
     closeModalBtns.forEach(btn => btn.onclick = () => taskModal.classList.add('hidden'));
+    kanbanCloseModalBtns.forEach(btn => btn.onclick = () => closeKanbanTaskModal());
     
-    window.onclick = (e) => {
+    window.addEventListener('click', (e) => {
         if (e.target === taskModal) taskModal.classList.add('hidden');
+        if (e.target === kanbanModal) closeKanbanTaskModal();
+        if (e.target === membersModal) closeMembersModal();
         if (e.target === document.getElementById('detail-modal')) closeDetailModal();
-    };
+    });
+
+    if (viewOkrBtn) viewOkrBtn.onclick = () => setActiveView('okr');
+    if (viewKanbanBtn) viewKanbanBtn.onclick = () => setActiveView('kanban');
+
+    if (membersBtn) membersBtn.onclick = () => openMembersModal();
+    if (closeMembersModalBtn) closeMembersModalBtn.onclick = () => closeMembersModal();
     
     taskForm.onsubmit = (e) => {
         e.preventDefault();
@@ -529,6 +878,64 @@ function setupEventListeners() {
         taskForm.reset();
         document.getElementById('auto-analysis').classList.add('hidden');
         taskModal.classList.add('hidden');
+    };
+
+    memberForm.onsubmit = (e) => {
+        e.preventDefault();
+        const name = memberNameInput.value.trim();
+        if (!name) return;
+
+        const editingId = memberIdInput.value;
+        if (editingId) {
+            const member = state.members.find(m => m.id == editingId);
+            if (!member) return;
+            member.name = name;
+            member.avatar = makeAvatar(name);
+        } else {
+            const newMember = {
+                id: Date.now(),
+                name,
+                color: getNextMemberColor(),
+                avatar: makeAvatar(name)
+            };
+            state.members.push(newMember);
+        }
+
+        saveMembers();
+        renderMembers();
+        renderAssigneeFilter();
+        renderMembersList();
+        renderTasks();
+        renderKanban();
+        closeMembersModal();
+    };
+
+    kanbanTaskForm.onsubmit = (e) => {
+        e.preventDefault();
+        const title = kanbanTaskTitleInput.value.trim();
+        if (!title) return;
+
+        const id = kanbanTaskIdInput.value;
+        const existing = state.kanbanTasks.find(t => t.id === id);
+        if (existing) {
+            existing.title = title;
+            existing.description = kanbanTaskDescInput.value;
+            existing.assigneeId = kanbanTaskAssigneeSelect.value;
+            existing.deadline = kanbanTaskDeadlineInput.value;
+        } else {
+            state.kanbanTasks.push({
+                id: Date.now().toString(),
+                title,
+                description: kanbanTaskDescInput.value,
+                assigneeId: kanbanTaskAssigneeSelect.value,
+                deadline: kanbanTaskDeadlineInput.value,
+                status: 'todo',
+                createdAt: new Date().toISOString()
+            });
+        }
+
+        renderKanban();
+        closeKanbanTaskModal();
     };
     
     // AI Panel Events
