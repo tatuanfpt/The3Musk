@@ -858,6 +858,10 @@ window.aiAction = async (type) => {
     if (type === "optimize-title") titleInput.value = out.split("\n")[0];
     else descInput.value = out;
   } catch (e) {
+    geminiAvailable = false;
+    state.aiEnabled = false;
+    saveState();
+    renderAiToggle();
     const out = runLocalAiWriter(type, content);
     if (type === "optimize-title") titleInput.value = out;
     else descInput.value = out;
@@ -1056,6 +1060,9 @@ function handleUnifiedAiChat() {
       appendAiMessage("ai", text || localResponse);
     } catch (e) {
       geminiAvailable = false;
+      state.aiEnabled = false;
+      saveState();
+      renderAiToggle();
       appendAiMessage("ai", localResponse);
     }
   }, 200);
@@ -1640,6 +1647,7 @@ function exportData() {
     okrs: state.okrs,
     currentUser: state.currentUser,
     darkMode: state.darkMode,
+    aiEnabled: state.aiEnabled,
     exportedAt: new Date().toISOString(),
   };
 
@@ -1670,10 +1678,13 @@ function importData(e) {
           data.currentUser ||
           (state.members.length > 0 ? state.members[0].id.toString() : null);
         state.darkMode = !!data.darkMode;
+        state.aiEnabled = data.aiEnabled ?? state.aiEnabled;
         applyDarkMode();
         renderMembers();
         renderOKRs();
         renderTasks();
+        renderAiToggle();
+        saveState();
         alert("Dữ liệu đã được import thành công!");
       } else {
         alert("File không hợp lệ!");
