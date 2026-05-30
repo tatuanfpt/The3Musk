@@ -57,3 +57,59 @@ Dự án **3Musk + One Thing** được xây dựng nhằm tối ưu hóa hiệu
 - **Thắng:** Phụ trách Epic 1, Epic 2.
 - **Nhật:** Phụ trách Epic 6 (One Thing AI Assistant).
 - **Tuấn:** Phụ trách Epic 3, Epic 4, Epic 5, Merge code.
+
+---
+
+## 5. AI Assistant (Nâng cấp theo QC)
+
+### 5.1. Input
+- Người dùng chat tự nhiên bằng tiếng Việt (có thể không dấu / sai chính tả / câu hỏi mơ hồ).
+- Ngữ cảnh hệ thống tối thiểu:
+  - `members`, `tasks`, `okrs`, `currentUser`, `darkMode`, `aiEnabled` từ LocalStorage.
+
+### 5.2. Processing (Workflow)
+- Chuẩn hoá input: lower-case + normalize không dấu (phục vụ nhận diện ý định).
+- Nhận diện ý định (intent) theo rule-based:
+  - One Thing / task của tôi / task của người khác / overdue / team overview / OKR.
+- Truy xuất dữ liệu theo ngữ cảnh:
+  - Lọc theo assignee, trạng thái, deadline.
+  - Nhóm theo `status` hoặc theo `deadline` (khi user yêu cầu).
+- Sinh output theo template thống nhất (Context → Summary → Groups).
+
+### 5.3. Output (Chuẩn cấu trúc)
+- Luôn trả lời có cấu trúc rõ ràng:
+  - Context (đang nói về ai/workspace)
+  - Summary (total/active/overdue + breakdown status)
+  - Groups (theo status/deadline)
+- Không bỏ thông tin quan trọng của task: `title`, `status`, `deadline` (nếu có), review state (nếu có).
+
+### 5.4. Dữ liệu demo (Seed)
+- Tự khởi tạo dữ liệu demo khi LocalStorage chưa có task:
+  - 3 members: Tuấn/Thắng/Nhật
+  - tasks đa dạng status/deadline/review để demo hỏi đáp
+  - có OKR mẫu để demo tab Workspace/OKR
+
+### 5.5. Bảo mật & AI Key
+- Không hardcode/commit API key vào repo.
+- Nếu dùng Gemini qua `server.py`, phải set env var `GOOGLE_API_KEY` (hoặc `GEMINI_API_KEY`) khi chạy server.
+- Nếu lỡ chia sẻ key công khai, cần rotate/revoke ngay trên Google Cloud Console.
+
+---
+
+## 6. PR Workflow & Verification
+
+### 6.1. Quy trình PR (không push thẳng main)
+1. `git fetch origin`
+2. `git checkout feat/ai-knowledge-manager`
+3. `git rebase origin/main` (resolve conflict nếu có)
+4. Verify nhanh:
+   - `node --check script.js`
+   - mở local server để test UI
+5. `git push origin feat/ai-knowledge-manager` (có thể cần `--force-with-lease` nếu vừa rebase)
+6. Tạo PR:
+   - `main <- feat/ai-knowledge-manager`
+
+### 6.2. Checklist trước khi submit PR
+- Không lỗi JS syntax/runtime.
+- Seed demo tạo dữ liệu đa dạng, không trùng lặp cho mọi user.
+- AI chat trả đúng cho câu hỏi: “Tuấn đang có task gì”, “task quá hạn”, “OKR”, “tổng quan/status”.
