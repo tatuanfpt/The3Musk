@@ -66,61 +66,27 @@ function saveState() {
   localStorage.setItem("3musk_darkMode", JSON.stringify(state.darkMode));
 }
 
-// Dark Mode
 function applyDarkMode() {
-  const body = document.body;
-  const navbar = document.getElementById("navbar");
-  const statCards = [
-    document.getElementById("stat-total-card"),
-    document.getElementById("stat-progress-card"),
-    document.getElementById("stat-review-card"),
-    document.getElementById("stat-done-card"),
-  ];
-  const taskModalContent = document.getElementById("task-modal-content");
-  const memberModalContent = document.getElementById("member-modal-content");
-  const inputs = document.querySelectorAll("input, textarea, select");
+  document.documentElement.classList.toggle("dark", !!state.darkMode);
+  document.documentElement.style.colorScheme = state.darkMode
+    ? "dark"
+    : "light";
+  darkModeBtn.innerHTML = state.darkMode
+    ? '<i class="lucide-moon"></i>'
+    : '<i class="lucide-sun"></i>';
+}
 
-  if (state.darkMode) {
-    body.classList.add("bg-gray-900", "text-white");
-    body.classList.remove("bg-gray-50", "text-gray-900");
-    navbar.classList.add("bg-gray-800", "border-gray-700");
-    navbar.classList.remove("bg-white", "border-gray-200");
-    statCards.forEach((card) => {
-      card.classList.add("bg-gray-800", "border-gray-700");
-      card.classList.remove("bg-white", "border-gray-200");
-      card.querySelector("p").classList.add("text-gray-400");
-      card.querySelector("p").classList.remove("text-gray-500");
-    });
-    taskModalContent.classList.add("bg-gray-800");
-    taskModalContent.classList.remove("bg-white");
-    memberModalContent.classList.add("bg-gray-800");
-    memberModalContent.classList.remove("bg-white");
-    inputs.forEach((input) => {
-      input.classList.add("bg-gray-700", "text-white", "border-gray-600");
-      input.classList.remove("bg-white", "text-gray-900", "border-gray-300");
-    });
-    darkModeBtn.innerHTML = '<i class="lucide-moon"></i>';
-  } else {
-    body.classList.remove("bg-gray-900", "text-white");
-    body.classList.add("bg-gray-50", "text-gray-900");
-    navbar.classList.remove("bg-gray-800", "border-gray-700");
-    navbar.classList.add("bg-white", "border-gray-200");
-    statCards.forEach((card) => {
-      card.classList.remove("bg-gray-800", "border-gray-700");
-      card.classList.add("bg-white", "border-gray-200");
-      card.querySelector("p").classList.remove("text-gray-400");
-      card.querySelector("p").classList.add("text-gray-500");
-    });
-    taskModalContent.classList.remove("bg-gray-800");
-    taskModalContent.classList.add("bg-white");
-    memberModalContent.classList.remove("bg-gray-800");
-    memberModalContent.classList.add("bg-white");
-    inputs.forEach((input) => {
-      input.classList.remove("bg-gray-700", "text-white", "border-gray-600");
-      input.classList.add("bg-white", "text-gray-900", "border-gray-300");
-    });
-    darkModeBtn.innerHTML = '<i class="lucide-sun"></i>';
-  }
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function isTaskApproved(task) {
+  return Array.isArray(task.reviewedBy) && task.reviewedBy.length > 0;
 }
 
 // Render Members
@@ -129,8 +95,8 @@ function renderMembers() {
   memberBadges.innerHTML = state.members
     .map(
       (m) => `
-    <div class="w-8 h-8 rounded-full ${m.color} text-white flex items-center justify-center text-xs font-bold border-2 border-white ring-1 ring-gray-200 cursor-pointer" title="${m.name}" onclick="selectUser(${m.id})">
-      ${m.avatar}
+    <div class="w-8 h-8 rounded-full ${m.color} text-white flex items-center justify-center text-xs font-bold border-2 border-white ${m.id == state.currentUser ? "ring-2 ring-indigo-500" : "ring-1 ring-gray-200"} cursor-pointer" title="${escapeHtml(m.name)}" onclick="selectUser(${m.id})">
+      ${escapeHtml(m.avatar)}
     </div>
   `,
     )
@@ -201,6 +167,7 @@ function renderTasks() {
 
   state.tasks.forEach((task) => {
     const assignee = state.members.find((m) => m.id == task.assigneeId);
+    const approved = task.status === "review" ? isTaskApproved(task) : false;
     const taskEl = document.createElement("div");
     taskEl.className =
       "bg-white p-4 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow cursor-pointer group dark:bg-gray-800 dark:border-gray-700";
@@ -224,8 +191,8 @@ function renderTasks() {
           </button>
         </div>
       </div>
-      <h4 class="font-semibold text-gray-800 dark:text-white mb-1">${task.title}</h4>
-      <p class="text-sm text-gray-500 dark:text-gray-400 mb-4 line-clamp-2">${task.description || ""}</p>
+      <h4 class="font-semibold text-gray-800 dark:text-white mb-1">${escapeHtml(task.title)}</h4>
+      <p class="text-sm text-gray-500 dark:text-gray-400 mb-4 line-clamp-2">${escapeHtml(task.description || "")}</p>
       ${
         task.deadline
           ? `
@@ -248,13 +215,13 @@ function renderTasks() {
       <div class="flex justify-between items-center pt-3 border-t border-gray-100 dark:border-gray-700">
         <div class="flex items-center gap-2">
           <div class="w-6 h-6 rounded-full ${assignee?.color || "bg-gray-400"} text-white flex items-center justify-center text-[10px] font-bold">
-            ${assignee?.avatar || "?"}
+            ${escapeHtml(assignee?.avatar || "?")}
           </div>
-          <span class="text-xs text-gray-600 dark:text-gray-300 font-medium">${assignee?.name || "Unassigned"}</span>
+          <span class="text-xs text-gray-600 dark:text-gray-300 font-medium">${escapeHtml(assignee?.name || "Unassigned")}</span>
         </div>
         <div class="flex gap-1">
           ${task.status !== "todo" ? `<button onclick="updateTaskStatus('${task.id}', 'prev')" class="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"><i class="lucide-chevron-left text-sm text-gray-500"></i></button>` : ""}
-          ${task.status !== "done" && !(task.status === "review" && !canApprove(task)) ? `<button onclick="updateTaskStatus('${task.id}', 'next')" class="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-indigo-600"><i class="lucide-chevron-right text-sm"></i></button>` : ""}
+          ${task.status !== "done" && !(task.status === "review" && !approved) ? `<button onclick="updateTaskStatus('${task.id}', 'next')" class="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-indigo-600"><i class="lucide-chevron-right text-sm"></i></button>` : ""}
         </div>
       </div>
     `;
@@ -324,14 +291,14 @@ function renderReviewButtons(task) {
     task.reviewedBy = [];
   }
 
-  const approved = task.reviewedBy.length > 0;
+  const approved = isTaskApproved(task);
 
   if (approved) {
     const approver = state.members.find((m) => m.id == task.reviewedBy[0]);
     return `
       <div class="flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
         <i class="lucide-check-circle"></i>
-        Đã review bởi ${approver?.name || "someone"}
+        Đã review bởi ${escapeHtml(approver?.name || "someone")}
       </div>
     `;
   }
@@ -352,10 +319,11 @@ function renderReviewButtons(task) {
 function approveTask(taskId) {
   const task = state.tasks.find((t) => t.id === taskId);
   if (task && canApprove(task)) {
-    if (!task.reviewedBy) {
-      task.reviewedBy = [];
+    const reviewedBy = Array.isArray(task.reviewedBy) ? task.reviewedBy : [];
+    if (!reviewedBy.includes(state.currentUser)) {
+      reviewedBy.push(state.currentUser);
     }
-    task.reviewedBy.push(state.currentUser);
+    task.reviewedBy = reviewedBy;
     renderTasks();
   }
 }
@@ -394,7 +362,6 @@ function setupEventListeners() {
   window.onclick = (e) => {
     if (e.target === taskModal) closeTaskModal();
     if (e.target === memberModal) closeMemberModal();
-    if (e.target === oneThingPanel) toggleOneThingPanel();
     if (e.target === focusModeOverlay) closeFocusMode();
   };
 }
@@ -427,13 +394,14 @@ function renderWelcomeMessage() {
 function addOneThingMessage(message) {
   const messageEl = document.createElement("div");
   messageEl.className = `flex gap-3 ${message.type === "user" ? "justify-end" : "justify-start"}`;
+  const safeText = escapeHtml(message.text);
   messageEl.innerHTML = `
     <div class="max-w-[80%] p-3 rounded-2xl ${
       message.type === "user"
         ? "bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-br-sm"
         : "bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white rounded-bl-sm"
     }">
-      <p class="text-sm whitespace-pre-wrap">${message.text}</p>
+      <p class="text-sm whitespace-pre-wrap">${safeText}</p>
     </div>
   `;
   oneThingMessages.appendChild(messageEl);
@@ -491,49 +459,32 @@ function processOneThingQuery(query) {
   ) {
     const oneThing = getOneThingPriority();
     if (!oneThing) {
-      return "Chúc mừng! Bạn không còn task nào chưa hoàn thành! 🎉";
+      return "Chúc mừng! Bạn không còn task nào chưa hoàn thành!";
     }
     const assignee = state.members.find((m) => m.id == oneThing.assigneeId);
-    return `✨ **One Thing Today** ✨
-
-**${oneThing.title}**
-${oneThing.description ? `- ${oneThing.description}` : ""}
-- Người thực hiện: ${assignee?.name || "Unassigned"}
-${oneThing.deadline ? `- Hạn nộp: ${formatDate(oneThing.deadline)}` : ""}
-- Trạng thái: ${getStatusText(oneThing.status)}`;
+    return `One Thing Today:\n- ${oneThing.title}\n${oneThing.description ? `- ${oneThing.description}\n` : ""}- Người thực hiện: ${assignee?.name || "Unassigned"}\n${oneThing.deadline ? `- Hạn nộp: ${formatDate(oneThing.deadline)}\n` : ""}- Trạng thái: ${getStatusText(oneThing.status)}`;
   }
 
   if (lowerQuery.includes("task của tôi") || lowerQuery.includes("my tasks")) {
     const myTasks = getCurrentUserTasks();
     if (myTasks.length === 0) {
-      return "Bạn không có task nào! 🎉";
+      return "Bạn không có task nào!";
     }
-    return `📋 **Your Tasks** (${myTasks.length})
-
-${myTasks
-  .map(
-    (task, idx) =>
-      `${idx + 1}. ${task.title} [${getStatusText(task.status)}]${
-        task.deadline ? ` - ${formatDate(task.deadline)}` : ""
-      }`,
-  )
-  .join("\n")}`;
+    return `Your Tasks (${myTasks.length})\n${myTasks
+      .map(
+        (task, idx) =>
+          `${idx + 1}. ${task.title} [${getStatusText(task.status)}]${
+            task.deadline ? ` - ${formatDate(task.deadline)}` : ""
+          }`,
+      )
+      .join("\n")}`;
   }
 
   if (lowerQuery.includes("team") || lowerQuery.includes("team ra sao")) {
     const statusCounts = { todo: 0, progress: 0, review: 0, done: 0 };
     state.tasks.forEach((t) => statusCounts[t.status]++);
 
-    return `👥 **Team Overview**
-
-- Tổng tasks: ${state.tasks.length}
-- Cần làm: ${statusCounts.todo}
-- Đang làm: ${statusCounts.progress}
-- Đang review: ${statusCounts.review}
-- Hoàn thành: ${statusCounts.done}
-
-Thành viên:
-${state.members.map((m) => `- ${m.name}`).join("\n")}`;
+    return `Team Overview\n- Tổng tasks: ${state.tasks.length}\n- Cần làm: ${statusCounts.todo}\n- Đang làm: ${statusCounts.progress}\n- Đang review: ${statusCounts.review}\n- Hoàn thành: ${statusCounts.done}\n\nThành viên:\n${state.members.map((m) => `- ${m.name}`).join("\n")}`;
   }
 
   return "Xin lỗi, tôi không hiểu câu hỏi! Hãy thử hỏi: 'hôm nay làm gì?' hoặc 'task của tôi?'";
@@ -726,10 +677,7 @@ window.updateTaskStatus = (taskId, direction) => {
 
   if (direction === "next") {
     // Check if trying to move from review to done without approval
-    if (
-      task.status === "review" &&
-      (!task.reviewedBy || task.reviewedBy.length === 0)
-    ) {
+    if (task.status === "review" && !isTaskApproved(task)) {
       alert("Task cần được review trước khi hoàn thành!");
       return;
     }
@@ -775,9 +723,8 @@ window.deleteMember = (memberId) => {
 
 window.selectUser = (userId) => {
   state.currentUser = userId;
+  renderMembers();
   renderTasks();
-  const user = state.members.find((m) => m.id === userId);
-  alert(`Đã chọn ${user?.name} làm người dùng hiện tại`);
 };
 
 function exportData() {
@@ -785,6 +732,7 @@ function exportData() {
     members: state.members,
     tasks: state.tasks,
     exportedAt: new Date().toISOString(),
+    version: 1,
   };
 
   const blob = new Blob([JSON.stringify(data, null, 2)], {
@@ -806,21 +754,98 @@ function importData(e) {
   reader.onload = (event) => {
     try {
       const data = JSON.parse(event.target.result);
-      if (data.members && data.tasks) {
-        state.members = data.members;
-        state.tasks = data.tasks;
-        renderMembers();
-        renderTasks();
-        alert("Dữ liệu đã được import thành công!");
-      } else {
-        alert("File không hợp lệ!");
+      const normalized = normalizeImportedData(data);
+      state.members = normalized.members;
+      state.tasks = normalized.tasks;
+      if (!state.members.some((m) => m.id == state.currentUser)) {
+        state.currentUser = state.members[0]?.id ?? null;
       }
+      renderMembers();
+      renderTasks();
+      alert("Dữ liệu đã được import thành công!");
     } catch (err) {
-      alert("Lỗi khi đọc file!");
+      alert(err?.message || "Lỗi khi đọc file!");
     }
   };
   reader.readAsText(file);
   e.target.value = "";
+}
+
+function normalizeImportedData(data) {
+  if (!data || typeof data !== "object") {
+    throw new Error("File không hợp lệ: thiếu dữ liệu JSON.");
+  }
+
+  if (!Array.isArray(data.members) || !Array.isArray(data.tasks)) {
+    throw new Error("File không hợp lệ: cần có members[] và tasks[].");
+  }
+
+  const members = data.members
+    .map((m) => {
+      const id = m?.id ?? Date.now();
+      const name = typeof m?.name === "string" ? m.name.trim() : "";
+      if (!name) return null;
+      const avatar =
+        typeof m?.avatar === "string" && m.avatar.trim()
+          ? m.avatar.trim()
+          : name.slice(0, 2).toUpperCase();
+      const color = typeof m?.color === "string" ? m.color : colors[0];
+      return { id, name, avatar, color };
+    })
+    .filter(Boolean);
+
+  if (members.length === 0) {
+    throw new Error("File không hợp lệ: members[] rỗng.");
+  }
+
+  const memberIdSet = new Set(members.map((m) => String(m.id)));
+
+  const allowedStatuses = new Set(["todo", "progress", "review", "done"]);
+  const tasks = data.tasks
+    .map((t) => {
+      const id = String(t?.id ?? Date.now());
+      const title = typeof t?.title === "string" ? t.title.trim() : "";
+      if (!title) return null;
+      const description =
+        typeof t?.description === "string" ? t.description : "";
+      const assigneeId = t?.assigneeId ?? members[0].id;
+      const status = allowedStatuses.has(t?.status) ? t.status : "todo";
+      const deadline = typeof t?.deadline === "string" ? t.deadline : "";
+      const createdAt =
+        typeof t?.createdAt === "string"
+          ? t.createdAt
+          : new Date().toISOString();
+      const reviewedBy = Array.isArray(t?.reviewedBy)
+        ? t.reviewedBy.filter((x) => memberIdSet.has(String(x)))
+        : [];
+
+      if (!memberIdSet.has(String(assigneeId))) {
+        return {
+          id,
+          title,
+          description,
+          assigneeId: members[0].id,
+          deadline,
+          status,
+          createdAt,
+          reviewedBy,
+        };
+      }
+
+      return {
+        id,
+        title,
+        description,
+        assigneeId,
+        deadline,
+        status,
+        createdAt,
+        reviewedBy,
+      };
+    })
+    .filter(Boolean);
+
+  return { members, tasks };
 }
 
 // Start

@@ -56,20 +56,20 @@
 *Code Owner, handles remaining features and final integration.*
 
 #### Epic 3: Review & Approval
-- [ ] **Task 3.1:** Build "Approve" button on tasks in Review column
-- [ ] **Task 3.2:** Implement "canApprove" check (BR-03: can't approve own task)
-- [ ] **Task 3.3:** Show who approved the task
-- [ ] **Task 3.4:** Block moving to Done without approval (alert message)
+- [x] **Task 3.1:** Build "Approve" button on tasks in Review column
+- [x] **Task 3.2:** Implement "canApprove" check (BR-03: can't approve own task)
+- [x] **Task 3.3:** Show who approved the task
+- [x] **Task 3.4:** Block moving to Done without approval (alert message)
 
 #### Epic 4: UX Features
-- [ ] **Task 4.1:** Implement Dark/Light mode toggle
-- [ ] **Task 4.2:** Save theme preference to LocalStorage
-- [ ] **Task 4.3:** Apply dark mode styles to all components
+- [x] **Task 4.1:** Implement Dark/Light mode toggle
+- [x] **Task 4.2:** Save theme preference to LocalStorage
+- [x] **Task 4.3:** Apply dark mode styles to all components
 
 #### Epic 5: Data Backup
-- [ ] **Task 5.1:** Build "Export" button to download JSON file
-- [ ] **Task 5.2:** Build "Import" button to upload JSON file
-- [ ] **Task 5.3:** Validate JSON before import (check valid structure)
+- [x] **Task 5.1:** Build "Export" button to download JSON file
+- [x] **Task 5.2:** Build "Import" button to upload JSON file
+- [x] **Task 5.3:** Validate JSON before import (check valid structure)
 
 #### Merge & Code Check
 - [ ] **Task M.1:** Review Thắng's code (Epic 1 & 2)

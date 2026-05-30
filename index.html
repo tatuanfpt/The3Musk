@@ -4,6 +4,13 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>3Musk - All for one, One for all</title>
+    <script>
+      tailwind = {
+        config: {
+          darkMode: "class",
+        },
+      };
+    </script>
     <script src="https://cdn.tailwindcss.com"></script>
     <link
       href="https://cdn.jsdelivr.net/npm/lucide-static@0.321.0/font/lucide.min.css"
@@ -22,10 +29,12 @@
       }
     </style>
   </head>
-  <body class="bg-gray-50 text-gray-900 transition-colors duration-300">
+  <body
+    class="bg-gray-50 text-gray-900 transition-colors duration-300 dark:bg-gray-900 dark:text-gray-100"
+  >
     <!-- Navigation -->
     <nav
-      class="bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center sticky top-0 z-10 transition-colors duration-300"
+      class="bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center sticky top-0 z-10 transition-colors duration-300 dark:bg-gray-900 dark:border-gray-700"
       id="navbar"
     >
       <div class="flex items-center gap-2">
@@ -43,21 +52,21 @@
         </div>
         <button
           id="dark-mode-btn"
-          class="p-2 rounded-lg hover:bg-gray-100 transition-colors"
+          class="p-2 rounded-lg hover:bg-gray-100 transition-colors text-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
           title="Toggle Dark Mode"
         >
           <i class="lucide-sun"></i>
         </button>
         <button
           id="export-btn"
-          class="p-2 rounded-lg hover:bg-gray-100 transition-colors"
+          class="p-2 rounded-lg hover:bg-gray-100 transition-colors text-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
           title="Export Data"
         >
           <i class="lucide-download"></i>
         </button>
         <label
           id="import-btn"
-          class="p-2 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer"
+          class="p-2 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer text-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
           title="Import Data"
         >
           <i class="lucide-upload"></i>
@@ -72,7 +81,7 @@
         </button>
         <button
           id="manage-members-btn"
-          class="p-2 rounded-lg hover:bg-gray-100 transition-colors"
+          class="p-2 rounded-lg hover:bg-gray-100 transition-colors text-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
           title="Manage Members"
         >
           <i class="lucide-users"></i>
@@ -90,31 +99,39 @@
       <!-- Stats Row -->
       <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
         <div
-          class="bg-white p-6 rounded-xl border border-gray-200 shadow-sm transition-colors duration-300"
+          class="bg-white p-6 rounded-xl border border-gray-200 shadow-sm transition-colors duration-300 dark:bg-gray-900 dark:border-gray-700"
           id="stat-total-card"
         >
-          <p class="text-sm text-gray-500 font-medium mb-1">Tổng số Task</p>
+          <p class="text-sm text-gray-500 font-medium mb-1 dark:text-gray-400">
+            Tổng số Task
+          </p>
           <h3 id="stat-total" class="text-3xl font-bold">0</h3>
         </div>
         <div
-          class="bg-white p-6 rounded-xl border border-gray-200 shadow-sm transition-colors duration-300"
+          class="bg-white p-6 rounded-xl border border-gray-200 shadow-sm transition-colors duration-300 dark:bg-gray-900 dark:border-gray-700"
           id="stat-progress-card"
         >
-          <p class="text-sm text-gray-500 font-medium mb-1">Đang thực hiện</p>
+          <p class="text-sm text-gray-500 font-medium mb-1 dark:text-gray-400">
+            Đang thực hiện
+          </p>
           <h3 id="stat-progress" class="text-3xl font-bold text-blue-600">0</h3>
         </div>
         <div
-          class="bg-white p-6 rounded-xl border border-gray-200 shadow-sm transition-colors duration-300"
+          class="bg-white p-6 rounded-xl border border-gray-200 shadow-sm transition-colors duration-300 dark:bg-gray-900 dark:border-gray-700"
           id="stat-review-card"
         >
-          <p class="text-sm text-gray-500 font-medium mb-1">Đang Review</p>
+          <p class="text-sm text-gray-500 font-medium mb-1 dark:text-gray-400">
+            Đang Review
+          </p>
           <h3 id="stat-review" class="text-3xl font-bold text-yellow-600">0</h3>
         </div>
         <div
-          class="bg-white p-6 rounded-xl border border-gray-200 shadow-sm transition-colors duration-300"
+          class="bg-white p-6 rounded-xl border border-gray-200 shadow-sm transition-colors duration-300 dark:bg-gray-900 dark:border-gray-700"
           id="stat-done-card"
         >
-          <p class="text-sm text-gray-500 font-medium mb-1">Đã hoàn thành</p>
+          <p class="text-sm text-gray-500 font-medium mb-1 dark:text-gray-400">
+            Đã hoàn thành
+          </p>
           <h3 id="stat-done" class="text-3xl font-bold text-green-600">0</h3>
         </div>
       </div>
@@ -123,70 +140,78 @@
         <!-- Todo Column -->
         <div class="flex flex-col gap-4">
           <div class="flex items-center justify-between px-2">
-            <h2 class="font-bold text-gray-700 flex items-center gap-2">
+            <h2
+              class="font-bold text-gray-700 flex items-center gap-2 dark:text-gray-200"
+            >
               <span class="w-2 h-2 bg-gray-400 rounded-full"></span> Cần làm
             </h2>
             <span
               id="count-todo"
-              class="bg-gray-200 text-gray-600 text-xs font-bold px-2 py-1 rounded-full"
+              class="bg-gray-200 text-gray-600 text-xs font-bold px-2 py-1 rounded-full dark:bg-gray-800 dark:text-gray-300"
               >0</span
             >
           </div>
           <div
             id="col-todo"
-            class="kanban-column bg-gray-100/50 rounded-xl p-3 border-2 border-dashed border-gray-200 flex flex-col gap-3"
+            class="kanban-column bg-gray-100/50 rounded-xl p-3 border-2 border-dashed border-gray-200 flex flex-col gap-3 dark:bg-gray-800/40 dark:border-gray-700"
           ></div>
         </div>
         <!-- In Progress Column -->
         <div class="flex flex-col gap-4">
           <div class="flex items-center justify-between px-2">
-            <h2 class="font-bold text-gray-700 flex items-center gap-2">
+            <h2
+              class="font-bold text-gray-700 flex items-center gap-2 dark:text-gray-200"
+            >
               <span class="w-2 h-2 bg-blue-500 rounded-full"></span> Đang làm
             </h2>
             <span
               id="count-progress"
-              class="bg-blue-100 text-blue-600 text-xs font-bold px-2 py-1 rounded-full"
+              class="bg-blue-100 text-blue-600 text-xs font-bold px-2 py-1 rounded-full dark:bg-blue-900/50 dark:text-blue-200"
               >0</span
             >
           </div>
           <div
             id="col-progress"
-            class="kanban-column bg-blue-50/30 rounded-xl p-3 border-2 border-dashed border-blue-100 flex flex-col gap-3"
+            class="kanban-column bg-blue-50/30 rounded-xl p-3 border-2 border-dashed border-blue-100 flex flex-col gap-3 dark:bg-blue-900/10 dark:border-blue-900/40"
           ></div>
         </div>
         <!-- Review Column -->
         <div class="flex flex-col gap-4">
           <div class="flex items-center justify-between px-2">
-            <h2 class="font-bold text-gray-700 flex items-center gap-2">
+            <h2
+              class="font-bold text-gray-700 flex items-center gap-2 dark:text-gray-200"
+            >
               <span class="w-2 h-2 bg-yellow-500 rounded-full"></span> Đang
               Review
             </h2>
             <span
               id="count-review"
-              class="bg-yellow-100 text-yellow-600 text-xs font-bold px-2 py-1 rounded-full"
+              class="bg-yellow-100 text-yellow-600 text-xs font-bold px-2 py-1 rounded-full dark:bg-yellow-900/40 dark:text-yellow-200"
               >0</span
             >
           </div>
           <div
             id="col-review"
-            class="kanban-column bg-yellow-50/30 rounded-xl p-3 border-2 border-dashed border-yellow-100 flex flex-col gap-3"
+            class="kanban-column bg-yellow-50/30 rounded-xl p-3 border-2 border-dashed border-yellow-100 flex flex-col gap-3 dark:bg-yellow-900/10 dark:border-yellow-900/40"
           ></div>
         </div>
         <!-- Done Column -->
         <div class="flex flex-col gap-4">
           <div class="flex items-center justify-between px-2">
-            <h2 class="font-bold text-gray-700 flex items-center gap-2">
+            <h2
+              class="font-bold text-gray-700 flex items-center gap-2 dark:text-gray-200"
+            >
               <span class="w-2 h-2 bg-green-500 rounded-full"></span> Hoàn thành
             </h2>
             <span
               id="count-done"
-              class="bg-green-100 text-green-600 text-xs font-bold px-2 py-1 rounded-full"
+              class="bg-green-100 text-green-600 text-xs font-bold px-2 py-1 rounded-full dark:bg-green-900/40 dark:text-green-200"
               >0</span
             >
           </div>
           <div
             id="col-done"
-            class="kanban-column bg-green-50/30 rounded-xl p-3 border-2 border-dashed border-green-100 flex flex-col gap-3"
+            class="kanban-column bg-green-50/30 rounded-xl p-3 border-2 border-dashed border-green-100 flex flex-col gap-3 dark:bg-green-900/10 dark:border-green-900/40"
           ></div>
         </div>
       </div>
@@ -197,7 +222,7 @@
       class="fixed inset-0 bg-black/50 hidden z-50 flex items-center justify-center p-4"
     >
       <div
-        class="bg-white rounded-2xl w-full max-w-md p-8 shadow-2xl transition-colors duration-300"
+        class="bg-white rounded-2xl w-full max-w-md p-8 shadow-2xl transition-colors duration-300 dark:bg-gray-900"
         id="task-modal-content"
       >
         <h2 class="text-2xl font-bold mb-6" id="task-modal-title">
@@ -211,7 +236,7 @@
               type="text"
               id="task-title"
               required
-              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none bg-white text-gray-900 transition-colors duration-300"
+              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none bg-white text-gray-900 transition-colors duration-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700"
             />
           </div>
           <div>
@@ -219,7 +244,7 @@
             <textarea
               id="task-desc"
               rows="3"
-              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none bg-white text-gray-900 transition-colors duration-300"
+              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none bg-white text-gray-900 transition-colors duration-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700"
             ></textarea>
           </div>
           <div>
@@ -228,7 +253,7 @@
             >
             <select
               id="task-assignee"
-              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none bg-white text-gray-900 transition-colors duration-300"
+              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none bg-white text-gray-900 transition-colors duration-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700"
             >
               <!-- Members will be injected here -->
             </select>
@@ -238,7 +263,7 @@
             <input
               type="date"
               id="task-deadline"
-              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none bg-white text-gray-900 transition-colors duration-300"
+              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none bg-white text-gray-900 transition-colors duration-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700"
             />
           </div>
           <div class="flex justify-end gap-3 mt-8">
@@ -266,7 +291,7 @@
       class="fixed inset-0 bg-black/50 hidden z-50 flex items-center justify-center p-4"
     >
       <div
-        class="bg-white rounded-2xl w-full max-w-md p-8 shadow-2xl transition-colors duration-300"
+        class="bg-white rounded-2xl w-full max-w-md p-8 shadow-2xl transition-colors duration-300 dark:bg-gray-900"
         id="member-modal-content"
       >
         <h2 class="text-2xl font-bold mb-6">Quản lý thành viên</h2>
@@ -281,7 +306,7 @@
               type="text"
               id="member-name"
               required
-              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none bg-white text-gray-900 transition-colors duration-300"
+              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none bg-white text-gray-900 transition-colors duration-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700"
             />
           </div>
           <div class="flex justify-end gap-3">
