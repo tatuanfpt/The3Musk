@@ -91,3 +91,83 @@ Dự án **3Musk + One Thing** được xây dựng nhằm tối ưu hóa hiệu
 - **Thắng:** Phụ trách Epic 1, Epic 2.
 - **Nhật:** Phụ trách Epic 6 (One Thing AI Assistant).
 - **Tuấn:** Phụ trách Epic 3, Epic 4, Epic 5, Merge code.
+
+---
+
+## 5. AI Assistant (Nâng cấp theo QC)
+
+### 5.1. Input
+- Người dùng chat tự nhiên bằng tiếng Việt (có thể không dấu / sai chính tả / câu hỏi mơ hồ).
+- Ngữ cảnh hệ thống tối thiểu:
+  - `members`, `tasks`, `okrs`, `currentUser`, `darkMode`, `aiEnabled` từ LocalStorage.
+
+### 5.2. Processing (Workflow)
+- Chuẩn hoá input: lower-case + normalize không dấu (phục vụ nhận diện ý định).
+- Nhận diện ý định (intent) theo rule-based:
+  - One Thing / task của tôi / task của người khác / overdue / team overview / OKR.
+- Truy xuất dữ liệu theo ngữ cảnh:
+  - Lọc theo assignee, trạng thái, deadline.
+  - Nhóm theo `status` hoặc theo `deadline` (khi user yêu cầu).
+- Sinh output theo template thống nhất (Context → Summary → Groups).
+
+### 5.3. Output (Chuẩn cấu trúc)
+- Luôn trả lời có cấu trúc rõ ràng:
+  - Context (đang nói về ai/workspace)
+  - Summary (total/active/overdue + breakdown status)
+  - Groups (theo status/deadline)
+- Không bỏ thông tin quan trọng của task: `title`, `status`, `deadline` (nếu có), review state (nếu có).
+
+### 5.4. Dữ liệu demo (Seed)
+- Tự khởi tạo dữ liệu demo khi LocalStorage chưa có task:
+  - 3 members: Tuấn/Thắng/Nhật
+  - tasks đa dạng status/deadline/review để demo hỏi đáp
+  - có OKR mẫu để demo tab Workspace/OKR
+
+### 5.5. Bảo mật & AI Key
+- Không hardcode/commit API key vào repo.
+- Nếu dùng Gemini qua `server.py`, phải set env var `GOOGLE_API_KEY` (hoặc `GEMINI_API_KEY`) khi chạy server.
+- Nếu lỡ chia sẻ key công khai, cần rotate/revoke ngay trên Google Cloud Console.
+
+---
+
+## 6. PR Workflow & Verification
+
+### 6.1. Quy trình PR (không push thẳng main)
+1. `git fetch origin`
+2. `git checkout feat/ai-knowledge-manager`
+3. `git rebase origin/main` (resolve conflict nếu có)
+4. Verify nhanh:
+   - `node --check script.js`
+   - mở local server để test UI
+5. `git push origin feat/ai-knowledge-manager` (có thể cần `--force-with-lease` nếu vừa rebase)
+6. Tạo PR:
+   - `main <- feat/ai-knowledge-manager`
+
+### 6.2. Checklist trước khi submit PR
+- Không lỗi JS syntax/runtime.
+- Seed demo tạo dữ liệu đa dạng, không trùng lặp cho mọi user.
+- AI chat trả đúng cho câu hỏi: “Tuấn đang có task gì”, “task quá hạn”, “OKR”, “tổng quan/status”.
+
+---
+
+## 7. Đánh giá theo Productivity Enhancement Track (tự chấm)
+
+### 7.1. Innovation & Originality (20%)
+- Hiện tại: Kanban + Review gate (BR-03) + OKR + AI Assistant local-first (fallback khi không có API).
+- Ước tính: 14/20
+- Gap: chưa có “process orchestration” sâu (tự động hoá cross-tool) ngoài import/export.
+
+### 7.2. TRAE Platform Integration Depth (30%)
+- Hiện tại: AI Assistant là “hub” cho task/OKR trong một UI, có proxy `server.py` để gọi Gemini (tuỳ chọn).
+- Ước tính: 16/30
+- Gap: chưa tích hợp nhiều nguồn dữ liệu (GitHub/Jira/Sheets/Slack). Demo hiện tập trung vào LocalStorage + workflow nội bộ.
+
+### 7.3. Usability & Design (20%)
+- Hiện tại: UI chính thức từ `main`, có Dark/Light, Kanban drag/drop, AI panel có tab, seed demo tự chạy.
+- Ước tính: 17/20
+- Gap: cần thêm hướng dẫn “câu hỏi mẫu” ngay trong AI panel theo từng tab để user mới dễ thử.
+
+### 7.4. Business Impact & Feasibility (30%)
+- Hiện tại: BR-03 giảm lỗi “done ảo”, AI trả One Thing + task theo người + overdue giúp giảm thời gian hỏi/đồng bộ.
+- Ước tính: 20/30
+- Gap: cần chốt KPI/ROI rõ ràng hơn (time saved/user/day, error reduction) và đưa vào demo script.
