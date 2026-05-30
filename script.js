@@ -8,6 +8,15 @@ const colors = [
   "bg-orange-500",
 ];
 
+function __dbg() {}
+
+window.stopCardClick = () => {
+  const e = window.event;
+  if (!e) return;
+  if (typeof e.stopPropagation === "function") e.stopPropagation();
+  if (typeof e.preventDefault === "function") e.preventDefault();
+};
+
 let state = {
   members: JSON.parse(localStorage.getItem("3musk_members")) || [
     { id: 1, name: "Athos", color: colors[0], avatar: "A" },
@@ -20,6 +29,21 @@ let state = {
   darkMode: JSON.parse(localStorage.getItem("3musk_darkMode")) || false,
   currentUser: JSON.parse(localStorage.getItem("3musk_currentUser")) || null, // For review purposes - we'll use this to track who's approving
 };
+
+let taskView = JSON.parse(localStorage.getItem("3musk_taskView")) || {
+  sortMode: "manual",
+  keyword: "",
+  filters: { priority: "all", progress: "all", complexity: "all" },
+  sort: [
+    { field: "priority", dir: "desc" },
+    { field: "none", dir: "desc" },
+    { field: "none", dir: "desc" },
+  ],
+};
+
+function saveTaskView() {
+  localStorage.setItem("3musk_taskView", JSON.stringify(taskView));
+}
 
 // Initialize current user (just pick first member for demo)
 if (state.members.length > 0 && !state.currentUser) {
@@ -74,16 +98,39 @@ const aiInput = document.getElementById("ai-input");
 const sendAiBtn = document.getElementById("send-ai-query");
 const aiMessages = document.getElementById("ai-messages");
 
+const taskSortModeSelect = document.getElementById("task-sort-mode");
+const taskFilterKeywordInput = document.getElementById("task-filter-keyword");
+const taskFilterPrioritySelect = document.getElementById("task-filter-priority");
+const taskFilterProgressSelect = document.getElementById("task-filter-progress");
+const taskFilterComplexitySelect = document.getElementById(
+  "task-filter-complexity",
+);
+const taskSort1Select = document.getElementById("task-sort-1");
+const taskSort1DirSelect = document.getElementById("task-sort-1-dir");
+const taskSort2Select = document.getElementById("task-sort-2");
+const taskSort2DirSelect = document.getElementById("task-sort-2-dir");
+const taskSort3Select = document.getElementById("task-sort-3");
+const taskSort3DirSelect = document.getElementById("task-sort-3-dir");
+
 // Initialize
 function init() {
+  __dbg("init.start", {
+    hasTaskModal: !!document.getElementById("task-modal"),
+    hasTaskDetailModal: !!document.getElementById("task-detail-modal"),
+    hasReviewModal: !!document.getElementById("review-modal"),
+    hasOkrModal: !!document.getElementById("okr-modal"),
+  });
   applyDarkMode();
   renderMembers();
   renderOKRs();
+  ensureTaskFields();
   ensureTaskOrder();
+  setupTaskViewControls();
   renderTasks();
   setupEventListeners();
   setupKanbanDragAndDrop();
   initAiAssistant();
+  __dbg("init.done");
 }
 
 // Save state to localStorage
@@ -321,6 +368,7 @@ function renderOKRs() {
 }
 
 function openOkrModal(okrId = null) {
+  __dbg("modal.openOkrModal.enter", { okrId });
   const modalTitle = document.getElementById("okr-modal-title");
   const okrIdInput = document.getElementById("okr-id");
   const titleInput = document.getElementById("okr-title");
@@ -344,10 +392,17 @@ function openOkrModal(okrId = null) {
   }
 
   okrModal.classList.remove("hidden");
+  __dbg("modal.openOkrModal.exit", {
+    okrId,
+    okrModalHidden: okrModal?.classList?.contains("hidden"),
+  });
   applyDarkMode();
 }
 
 function closeOkrModal() {
+  __dbg("modal.closeOkrModal", {
+    okrModalHiddenBefore: okrModal?.classList?.contains("hidden"),
+  });
   okrModal.classList.add("hidden");
   okrForm.reset();
   krList.innerHTML = "";
@@ -444,6 +499,7 @@ window.deleteOkr = (okrId) => {
 
 // Render Tasks
 function renderTasks() {
+  ensureTaskFields();
   ensureTaskOrder();
   const cols = {
     todo: document.getElementById("col-todo"),
@@ -469,14 +525,54 @@ function renderTasks() {
   let statusCounts = { todo: 0, progress: 0, review: 0, done: 0 };
 
   const statusOrder = { todo: 0, progress: 1, review: 2, done: 3 };
-  const tasksToRender = state.tasks
-    .slice()
-    .sort((a, b) => {
-      const aStatus = statusOrder[a.status] ?? 999;
-      const bStatus = statusOrder[b.status] ?? 999;
-      if (aStatus !== bStatus) return aStatus - bStatus;
-      return (a.order ?? 0) - (b.order ?? 0);
-    });
+  const keyword = (taskView.keyword || "").trim().toLowerCase();
+  const tasksFiltered = state.tasks.filter((t) => {
+    if (keyword && !(t.title || "").toLowerCase().includes(keyword)) return false;
+    if (taskView.filters.priority !== "all" && t.priority !== taskView.filters.priority) return false;
+    if (taskView.filters.progress !== "all" && t.progressState !== taskView.filters.progress) return false;
+    if (taskView.filters.complexity !== "all" && t.complexity !== taskView.filters.complexity) return false;
+    return true;
+  });
+
+  const compareByField = (a, b, field, dir) => {
+    let delta = 0;
+    if (field === "priority") {
+      delta = (priorityRank[a.priority] ?? 1) - (priorityRank[b.priority] ?? 1);
+    } else if (field === "progress") {
+      delta =
+        (progressRank[a.progressState] ?? 1) -
+        (progressRank[b.progressState] ?? 1);
+    } else if (field === "complexity") {
+      delta =
+        (complexityRank[a.complexity] ?? 1) -
+        (complexityRank[b.complexity] ?? 1);
+    } else if (field === "deadline") {
+      const aTs = a.deadline ? new Date(a.deadline).getTime() : Number.POSITIVE_INFINITY;
+      const bTs = b.deadline ? new Date(b.deadline).getTime() : Number.POSITIVE_INFINITY;
+      delta = aTs - bTs;
+    } else if (field === "title") {
+      delta = String(a.title || "").localeCompare(String(b.title || ""), "vi");
+    }
+    if (delta === 0) return 0;
+    return dir === "desc" ? -delta : delta;
+  };
+
+  const compareRank = (a, b) => {
+    const specs = (taskView.sort || []).filter((s) => s && s.field && s.field !== "none");
+    for (const s of specs) {
+      const d = compareByField(a, b, s.field, s.dir);
+      if (d !== 0) return d;
+    }
+    return (a.order ?? 0) - (b.order ?? 0);
+  };
+
+  const tasksToRender = tasksFiltered.slice().sort((a, b) => {
+    const aStatus = statusOrder[a.status] ?? 999;
+    const bStatus = statusOrder[b.status] ?? 999;
+    if (aStatus !== bStatus) return aStatus - bStatus;
+    if (taskView.sortMode === "rank") return compareRank(a, b);
+    return (a.order ?? 0) - (b.order ?? 0);
+  });
 
   tasksToRender.forEach((task) => {
     const assignee = state.members.find((m) => m.id == task.assigneeId);
@@ -498,13 +594,18 @@ function renderTasks() {
           ${getStatusText(task.status)}
         </span>
         <div class="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-          <button onclick="event.stopPropagation(); editTask('${task.id}')" class="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded">
+          <button onclick="stopCardClick(); editTask('${task.id}')" class="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded">
             <i class="lucide-edit text-sm text-gray-500"></i>
           </button>
-          <button onclick="event.stopPropagation(); deleteTask('${task.id}')" class="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded">
+          <button onclick="stopCardClick(); deleteTask('${task.id}')" class="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded">
             <i class="lucide-trash-2 text-sm text-red-500"></i>
           </button>
         </div>
+      </div>
+      <div class="flex flex-wrap gap-1 mb-2">
+        <span class="text-[10px] font-bold px-2 py-0.5 rounded ${getPriorityBadgeClass(task.priority)}">Ưu tiên: ${getPriorityText(task.priority)}</span>
+        <span class="text-[10px] font-bold px-2 py-0.5 rounded ${getProgressBadgeClass(task.progressState)}">Tiến độ: ${getProgressText(task.progressState)}</span>
+        <span class="text-[10px] font-bold px-2 py-0.5 rounded ${getComplexityBadgeClass(task.complexity)}">Phức tạp: ${getComplexityText(task.complexity)}</span>
       </div>
       <h4 class="font-semibold text-gray-800 dark:text-white mb-1">${task.title}</h4>
       <p class="text-sm text-gray-500 dark:text-gray-400 mb-4 line-clamp-2">${task.description || ""}</p>
@@ -649,7 +750,7 @@ function renderReviewButtons(task) {
 
   if (canApprove(task)) {
     return `
-      <button onclick="event.stopPropagation(); openReviewModal('${task.id}')" class="px-3 py-1 bg-indigo-600 text-white text-xs font-semibold rounded hover:bg-indigo-700 transition-colors">
+      <button onclick="stopCardClick(); openReviewModal('${task.id}')" class="px-3 py-1 bg-indigo-600 text-white text-xs font-semibold rounded hover:bg-indigo-700 transition-colors">
         Review
       </button>
     `;
@@ -660,12 +761,16 @@ function renderReviewButtons(task) {
   `;
 }
 
-window.openReviewModal = (taskId) => openReviewModal(taskId);
-
 function openReviewModal(taskId) {
+  __dbg("modal.openReviewModal.enter", { taskId });
   const task = state.tasks.find((t) => t.id === taskId);
   if (!task) return;
   if (!canApprove(task)) {
+    __dbg("modal.openReviewModal.denied", {
+      taskId,
+      currentUser: state.currentUser,
+      assigneeId: task.assigneeId,
+    });
     alert("Bạn không có quyền review task này.");
     return;
   }
@@ -675,6 +780,13 @@ function openReviewModal(taskId) {
   document.getElementById("review-description").value = task.description || "";
   document.getElementById("review-deadline").value = task.deadline || "";
   document.getElementById("review-note").value = task.reviewNote || "";
+  const reviewPriority = document.getElementById("review-priority");
+  const reviewProgress = document.getElementById("review-progress");
+  const reviewComplexity = document.getElementById("review-complexity");
+  if (reviewPriority) reviewPriority.value = task.priority || "medium";
+  if (reviewProgress)
+    reviewProgress.value = task.progressState || statusToProgressState(task.status);
+  if (reviewComplexity) reviewComplexity.value = task.complexity || "medium";
 
   const reviewAssigneeSelect = document.getElementById("review-assignee");
   reviewAssigneeSelect.innerHTML = state.members
@@ -683,10 +795,17 @@ function openReviewModal(taskId) {
   reviewAssigneeSelect.value = task.assigneeId;
 
   reviewModal.classList.remove("hidden");
+  __dbg("modal.openReviewModal.exit", {
+    taskId,
+    reviewModalHidden: reviewModal?.classList?.contains("hidden"),
+  });
   applyDarkMode();
 }
 
 function closeReviewModal() {
+  __dbg("modal.closeReviewModal", {
+    reviewModalHiddenBefore: reviewModal?.classList?.contains("hidden"),
+  });
   reviewModal.classList.add("hidden");
   reviewForm.reset();
 }
@@ -705,6 +824,16 @@ function submitReviewDecision(decision) {
   task.description = document.getElementById("review-description").value;
   task.assigneeId = document.getElementById("review-assignee").value;
   task.deadline = document.getElementById("review-deadline").value;
+  task.priority = document.getElementById("review-priority")?.value || task.priority || "medium";
+  task.progressState =
+    document.getElementById("review-progress")?.value ||
+    task.progressState ||
+    statusToProgressState(task.status);
+  task.complexity =
+    document.getElementById("review-complexity")?.value ||
+    task.complexity ||
+    "medium";
+  updateTaskStatusFromProgress(task);
 
   task.reviewStatus = decision;
   task.reviewBy = state.currentUser;
@@ -728,7 +857,17 @@ function submitReviewDecision(decision) {
 // Event Listeners
 function setupEventListeners() {
   // Task Modal
-  addTaskBtn.onclick = () => openTaskModal();
+  __dbg("setupEventListeners.start", {
+    addTaskBtn: !!addTaskBtn,
+    closeModalBtn: !!closeModalBtn,
+    taskForm: !!taskForm,
+    addOkrBtn: !!addOkrBtn,
+    aiAssistantBtn: !!aiAssistantBtn,
+  });
+  addTaskBtn.onclick = () => {
+    __dbg("click.addTaskBtn");
+    openTaskModal();
+  };
   closeModalBtn.onclick = () => closeTaskModal();
   taskForm.onsubmit = handleTaskSubmit;
   closeTaskDetailModalBtn.onclick = () => closeTaskDetailModal();
@@ -760,8 +899,14 @@ function setupEventListeners() {
 
   closeFocusModeBtn.onclick = closeFocusMode;
 
-  aiAssistantBtn.onclick = () => aiPanel.classList.remove("hidden");
-  closeAiPanelBtn.onclick = () => aiPanel.classList.add("hidden");
+  aiAssistantBtn.onclick = () => {
+    __dbg("click.aiAssistantBtn");
+    aiPanel.classList.remove("hidden");
+  };
+  closeAiPanelBtn.onclick = () => {
+    __dbg("click.closeAiPanelBtn");
+    aiPanel.classList.add("hidden");
+  };
   aiToggleBtn.onclick = () => toggleAiEnabled();
   aiTabOneThing.onclick = () => setAiMode("onething");
   aiTabWorkspace.onclick = () => setAiMode("workspace");
@@ -772,16 +917,30 @@ function setupEventListeners() {
   };
   sendAiBtn.onclick = () => handleUnifiedAiChat();
 
-  addOkrBtn.onclick = () => openOkrModal();
+  addOkrBtn.onclick = () => {
+    __dbg("click.addOkrBtn");
+    openOkrModal();
+  };
   closeOkrModalBtn.onclick = () => closeOkrModal();
   cancelOkrBtn.onclick = () => closeOkrModal();
   okrForm.onsubmit = handleOkrSubmit;
   addKrBtn.onclick = () => addKrRow();
 
-  closeReviewModalBtn.onclick = () => closeReviewModal();
-  approveReviewBtn.onclick = () => submitReviewDecision("approved");
-  rejectReviewBtn.onclick = () => submitReviewDecision("rejected");
+  closeReviewModalBtn.onclick = () => {
+    __dbg("click.closeReviewModalBtn");
+    closeReviewModal();
+  };
+  approveReviewBtn.onclick = () => {
+    __dbg("click.approveReviewBtn");
+    submitReviewDecision("approved");
+  };
+  rejectReviewBtn.onclick = () => {
+    __dbg("click.rejectReviewBtn");
+    submitReviewDecision("rejected");
+  };
   reviewForm.onsubmit = (e) => e.preventDefault();
+
+  __dbg("setupEventListeners.done");
 
   // Close modals on outside click
   window.onclick = (e) => {
@@ -1246,6 +1405,10 @@ function closeFocusMode() {
 }
 
 function openTaskModal(task = null) {
+  __dbg("modal.openTaskModal.enter", {
+    taskId: task?.id || null,
+    taskModalHidden: taskModal?.classList?.contains("hidden"),
+  });
   const modalTitle = document.getElementById("task-modal-title");
   const submitBtn = document.getElementById("task-submit-btn");
   const taskIdInput = document.getElementById("task-id");
@@ -1253,6 +1416,9 @@ function openTaskModal(task = null) {
   const descInput = document.getElementById("task-desc");
   const assigneeInput = document.getElementById("task-assignee");
   const deadlineInput = document.getElementById("task-deadline");
+  const priorityInput = document.getElementById("task-priority");
+  const progressInput = document.getElementById("task-progress");
+  const complexityInput = document.getElementById("task-complexity");
 
   if (task) {
     modalTitle.textContent = "Chỉnh sửa Task";
@@ -1262,16 +1428,29 @@ function openTaskModal(task = null) {
     descInput.value = task.description || "";
     assigneeInput.value = task.assigneeId;
     deadlineInput.value = task.deadline || "";
+    if (priorityInput) priorityInput.value = task.priority || "medium";
+    if (progressInput)
+      progressInput.value = task.progressState || statusToProgressState(task.status);
+    if (complexityInput) complexityInput.value = task.complexity || "medium";
   } else {
     modalTitle.textContent = "Giao Task mới";
     submitBtn.textContent = "Tạo Task";
     taskForm.reset();
+    if (priorityInput) priorityInput.value = "medium";
+    if (progressInput) progressInput.value = "not_started";
+    if (complexityInput) complexityInput.value = "medium";
   }
 
   taskModal.classList.remove("hidden");
+  __dbg("modal.openTaskModal.exit", {
+    taskModalHidden: taskModal?.classList?.contains("hidden"),
+  });
 }
 
 function closeTaskModal() {
+  __dbg("modal.closeTaskModal", {
+    taskModalHiddenBefore: taskModal?.classList?.contains("hidden"),
+  });
   taskModal.classList.add("hidden");
   taskForm.reset();
 }
@@ -1284,6 +1463,11 @@ function handleTaskSubmit(e) {
   const description = document.getElementById("task-desc").value;
   const assigneeId = document.getElementById("task-assignee").value;
   const deadline = document.getElementById("task-deadline").value;
+  const priority = document.getElementById("task-priority")?.value || "medium";
+  const progressState =
+    document.getElementById("task-progress")?.value || "in_progress";
+  const complexity =
+    document.getElementById("task-complexity")?.value || "medium";
 
   if (taskId) {
     // Edit existing task
@@ -1293,17 +1477,25 @@ function handleTaskSubmit(e) {
       task.description = description;
       task.assigneeId = assigneeId;
       task.deadline = deadline;
+      task.priority = priority;
+      task.progressState = progressState;
+      task.complexity = complexity;
+      updateTaskStatusFromProgress(task);
     }
   } else {
     // Create new task
+    const status = progressStateToStatus(progressState);
     const newTask = {
       id: Date.now().toString(),
       title,
       description,
       assigneeId,
       deadline,
-      status: "todo",
-      order: getNextOrder("todo"),
+      priority,
+      progressState,
+      complexity,
+      status,
+      order: getNextOrder(status),
       createdAt: new Date().toISOString(),
       reviewedBy: [],
     };
@@ -1438,6 +1630,208 @@ window.selectUser = (userId) => {
   saveState();
 };
 
+const priorityRank = { low: 0, medium: 1, high: 2 };
+const progressRank = { not_started: 0, in_progress: 1, in_review: 2, done: 3 };
+const complexityRank = { easy: 0, medium: 1, hard: 2, very_hard: 3 };
+
+function statusToProgressState(status) {
+  switch (status) {
+    case "todo":
+      return "not_started";
+    case "progress":
+      return "in_progress";
+    case "review":
+      return "in_review";
+    case "done":
+      return "done";
+    default:
+      return "in_progress";
+  }
+}
+
+function progressStateToStatus(progressState) {
+  switch (progressState) {
+    case "not_started":
+      return "todo";
+    case "in_progress":
+      return "progress";
+    case "in_review":
+      return "review";
+    case "done":
+      return "done";
+    default:
+      return "progress";
+  }
+}
+
+function getPriorityText(priority) {
+  switch (priority) {
+    case "high":
+      return "Cao";
+    case "medium":
+      return "Trung bình";
+    case "low":
+      return "Thấp";
+    default:
+      return "Trung bình";
+  }
+}
+
+function getProgressText(progressState) {
+  switch (progressState) {
+    case "not_started":
+      return "Chưa bắt đầu";
+    case "in_progress":
+      return "Đang thực hiện";
+    case "in_review":
+      return "Đang xem xét";
+    case "done":
+      return "Hoàn thành";
+    default:
+      return "Đang thực hiện";
+  }
+}
+
+function getComplexityText(complexity) {
+  switch (complexity) {
+    case "easy":
+      return "Dễ";
+    case "medium":
+      return "Trung bình";
+    case "hard":
+      return "Khó";
+    case "very_hard":
+      return "Rất khó";
+    default:
+      return "Trung bình";
+  }
+}
+
+function getPriorityBadgeClass(priority) {
+  switch (priority) {
+    case "high":
+      return "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-200";
+    case "medium":
+      return "bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-200";
+    case "low":
+      return "bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200";
+    default:
+      return "bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-200";
+  }
+}
+
+function getProgressBadgeClass(progressState) {
+  switch (progressState) {
+    case "not_started":
+      return "bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200";
+    case "in_progress":
+      return "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200";
+    case "in_review":
+      return "bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-200";
+    case "done":
+      return "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-200";
+    default:
+      return "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200";
+  }
+}
+
+function getComplexityBadgeClass(complexity) {
+  switch (complexity) {
+    case "easy":
+      return "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-200";
+    case "medium":
+      return "bg-indigo-100 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-200";
+    case "hard":
+      return "bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-200";
+    case "very_hard":
+      return "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-200";
+    default:
+      return "bg-indigo-100 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-200";
+  }
+}
+
+function ensureTaskFields() {
+  let changed = false;
+  state.tasks.forEach((t) => {
+    if (!t.priority) {
+      t.priority = "medium";
+      changed = true;
+    }
+    if (!t.complexity) {
+      t.complexity = "medium";
+      changed = true;
+    }
+    if (!t.progressState) {
+      t.progressState = statusToProgressState(t.status);
+      changed = true;
+    }
+    const expectedProgress = statusToProgressState(t.status);
+    if (t.progressState !== expectedProgress) {
+      t.progressState = expectedProgress;
+      changed = true;
+    }
+  });
+  if (changed) saveState();
+}
+
+function updateTaskStatusFromProgress(task) {
+  const nextStatus = progressStateToStatus(task.progressState);
+  if (task.status !== nextStatus) {
+    task.status = nextStatus;
+    task.order = getNextOrder(nextStatus);
+  }
+}
+
+function setupTaskViewControls() {
+  if (!taskSortModeSelect) return;
+
+  taskSortModeSelect.value = taskView.sortMode;
+  if (taskFilterKeywordInput) taskFilterKeywordInput.value = taskView.keyword;
+  if (taskFilterPrioritySelect)
+    taskFilterPrioritySelect.value = taskView.filters.priority;
+  if (taskFilterProgressSelect)
+    taskFilterProgressSelect.value = taskView.filters.progress;
+  if (taskFilterComplexitySelect)
+    taskFilterComplexitySelect.value = taskView.filters.complexity;
+
+  if (taskSort1Select) taskSort1Select.value = taskView.sort[0]?.field || "priority";
+  if (taskSort1DirSelect) taskSort1DirSelect.value = taskView.sort[0]?.dir || "desc";
+  if (taskSort2Select) taskSort2Select.value = taskView.sort[1]?.field || "none";
+  if (taskSort2DirSelect) taskSort2DirSelect.value = taskView.sort[1]?.dir || "desc";
+  if (taskSort3Select) taskSort3Select.value = taskView.sort[2]?.field || "none";
+  if (taskSort3DirSelect) taskSort3DirSelect.value = taskView.sort[2]?.dir || "desc";
+
+  const onChange = () => {
+    taskView.sortMode = taskSortModeSelect.value;
+    taskView.keyword = (taskFilterKeywordInput?.value || "").trim();
+    taskView.filters.priority = taskFilterPrioritySelect?.value || "all";
+    taskView.filters.progress = taskFilterProgressSelect?.value || "all";
+    taskView.filters.complexity = taskFilterComplexitySelect?.value || "all";
+    taskView.sort = [
+      { field: taskSort1Select?.value || "priority", dir: taskSort1DirSelect?.value || "desc" },
+      { field: taskSort2Select?.value || "none", dir: taskSort2DirSelect?.value || "desc" },
+      { field: taskSort3Select?.value || "none", dir: taskSort3DirSelect?.value || "desc" },
+    ];
+    saveTaskView();
+    renderTasks();
+  };
+
+  taskSortModeSelect.onchange = onChange;
+  if (taskFilterPrioritySelect) taskFilterPrioritySelect.onchange = onChange;
+  if (taskFilterProgressSelect) taskFilterProgressSelect.onchange = onChange;
+  if (taskFilterComplexitySelect) taskFilterComplexitySelect.onchange = onChange;
+  if (taskSort1Select) taskSort1Select.onchange = onChange;
+  if (taskSort1DirSelect) taskSort1DirSelect.onchange = onChange;
+  if (taskSort2Select) taskSort2Select.onchange = onChange;
+  if (taskSort2DirSelect) taskSort2DirSelect.onchange = onChange;
+  if (taskSort3Select) taskSort3Select.onchange = onChange;
+  if (taskSort3DirSelect) taskSort3DirSelect.onchange = onChange;
+
+  if (taskFilterKeywordInput) {
+    taskFilterKeywordInput.oninput = onChange;
+  }
+}
+
 function ensureTaskOrder() {
   const statusOrder = ["todo", "progress", "review", "done"];
   statusOrder.forEach((status) => {
@@ -1514,6 +1908,7 @@ function moveTask(taskId, toStatus, beforeTaskId = null) {
   toIds.splice(insertAt, 0, taskId);
 
   task.status = toStatus;
+  task.progressState = statusToProgressState(toStatus);
 
   const applyOrders = (status, ids) => {
     ids.forEach((id, idx) => {
@@ -1557,6 +1952,7 @@ function setupKanbanDragAndDrop() {
 }
 
 function openTaskDetailModal(taskId) {
+  __dbg("modal.openTaskDetailModal.enter", { taskId });
   const task = state.tasks.find((t) => t.id === taskId);
   if (!task) return;
 
@@ -1566,6 +1962,7 @@ function openTaskDetailModal(taskId) {
   const titleEl = document.getElementById("task-detail-title");
   const assigneeEl = document.getElementById("task-detail-assignee");
   const deadlineEl = document.getElementById("task-detail-deadline");
+  const metaEl = document.getElementById("task-detail-meta");
   const descEl = document.getElementById("task-detail-description");
   const reviewWrapEl = document.getElementById("task-detail-review");
   const reviewEl = document.getElementById("task-detail-review-content");
@@ -1590,6 +1987,14 @@ function openTaskDetailModal(taskId) {
     `;
   } else {
     deadlineEl.innerHTML = "";
+  }
+
+  if (metaEl) {
+    metaEl.innerHTML = `
+      <span class="text-[10px] font-bold px-2 py-0.5 rounded ${getPriorityBadgeClass(task.priority)}">Ưu tiên: ${getPriorityText(task.priority)}</span>
+      <span class="text-[10px] font-bold px-2 py-0.5 rounded ${getProgressBadgeClass(task.progressState)}">Tiến độ: ${getProgressText(task.progressState)}</span>
+      <span class="text-[10px] font-bold px-2 py-0.5 rounded ${getComplexityBadgeClass(task.complexity)}">Phức tạp: ${getComplexityText(task.complexity)}</span>
+    `;
   }
 
   const isApproved =
@@ -1633,6 +2038,10 @@ function openTaskDetailModal(taskId) {
   }
 
   taskDetailModal.classList.remove("hidden");
+  __dbg("modal.openTaskDetailModal.exit", {
+    taskId,
+    taskDetailHidden: taskDetailModal?.classList?.contains("hidden"),
+  });
   applyDarkMode();
 }
 
@@ -1648,6 +2057,7 @@ function exportData() {
     currentUser: state.currentUser,
     darkMode: state.darkMode,
     aiEnabled: state.aiEnabled,
+    taskView,
     exportedAt: new Date().toISOString(),
   };
 
@@ -1679,11 +2089,16 @@ function importData(e) {
           (state.members.length > 0 ? state.members[0].id.toString() : null);
         state.darkMode = !!data.darkMode;
         state.aiEnabled = data.aiEnabled ?? state.aiEnabled;
+        taskView = data.taskView || taskView;
         applyDarkMode();
         renderMembers();
         renderOKRs();
+        ensureTaskFields();
+        ensureTaskOrder();
+        setupTaskViewControls();
         renderTasks();
         renderAiToggle();
+        saveTaskView();
         saveState();
         alert("Dữ liệu đã được import thành công!");
       } else {
