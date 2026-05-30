@@ -31,6 +31,9 @@
 2. Mở file `index.html` trực tiếp bằng trình duyệt (Chrome, Firefox, Safari...).
 3. Bắt đầu thêm task và quản lý cùng đội ngũ của bạn!
 
+## Demo (GitHub Pages)
+- https://tatuanfpt.github.io/The3Musk/
+
 ## 🌐 Deploy public (GitHub Pages)
 1. Push code lên GitHub (branch `main`).
 2. Vào GitHub repo → Settings → Pages → Source chọn GitHub Actions.
