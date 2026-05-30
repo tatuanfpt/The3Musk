@@ -113,3 +113,27 @@ Dự án **3Musk + One Thing** được xây dựng nhằm tối ưu hóa hiệu
 - Không lỗi JS syntax/runtime.
 - Seed demo tạo dữ liệu đa dạng, không trùng lặp cho mọi user.
 - AI chat trả đúng cho câu hỏi: “Tuấn đang có task gì”, “task quá hạn”, “OKR”, “tổng quan/status”.
+
+---
+
+## 7. Đánh giá theo Productivity Enhancement Track (tự chấm)
+
+### 7.1. Innovation & Originality (20%)
+- Hiện tại: Kanban + Review gate (BR-03) + OKR + AI Assistant local-first (fallback khi không có API).
+- Ước tính: 14/20
+- Gap: chưa có “process orchestration” sâu (tự động hoá cross-tool) ngoài import/export.
+
+### 7.2. TRAE Platform Integration Depth (30%)
+- Hiện tại: AI Assistant là “hub” cho task/OKR trong một UI, có proxy `server.py` để gọi Gemini (tuỳ chọn).
+- Ước tính: 16/30
+- Gap: chưa tích hợp nhiều nguồn dữ liệu (GitHub/Jira/Sheets/Slack). Demo hiện tập trung vào LocalStorage + workflow nội bộ.
+
+### 7.3. Usability & Design (20%)
+- Hiện tại: UI chính thức từ `main`, có Dark/Light, Kanban drag/drop, AI panel có tab, seed demo tự chạy.
+- Ước tính: 17/20
+- Gap: cần thêm hướng dẫn “câu hỏi mẫu” ngay trong AI panel theo từng tab để user mới dễ thử.
+
+### 7.4. Business Impact & Feasibility (30%)
+- Hiện tại: BR-03 giảm lỗi “done ảo”, AI trả One Thing + task theo người + overdue giúp giảm thời gian hỏi/đồng bộ.
+- Ước tính: 20/30
+- Gap: cần chốt KPI/ROI rõ ràng hơn (time saved/user/day, error reduction) và đưa vào demo script.
