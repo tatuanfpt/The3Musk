@@ -124,6 +124,7 @@ function init() {
     hasReviewModal: !!document.getElementById("review-modal"),
     hasOkrModal: !!document.getElementById("okr-modal"),
   });
+  ensureDemoData();
   applyDarkMode();
   renderMembers();
   renderOKRs();
@@ -145,6 +146,129 @@ function saveState() {
   localStorage.setItem("3musk_aiEnabled", JSON.stringify(state.aiEnabled));
   localStorage.setItem("3musk_darkMode", JSON.stringify(state.darkMode));
   localStorage.setItem("3musk_currentUser", JSON.stringify(state.currentUser));
+}
+
+function ensureDemoData() {
+  const seedKey = "3musk_seed_version";
+  if (localStorage.getItem(seedKey)) return;
+  if (Array.isArray(state.tasks) && state.tasks.length > 0) {
+    localStorage.setItem(seedKey, "1");
+    return;
+  }
+  seedDemoData();
+  localStorage.setItem(seedKey, "1");
+}
+
+function seedDemoData() {
+  const members = [
+    { id: "101", name: "Tuấn", color: colors[0], avatar: "T" },
+    { id: "102", name: "Thắng", color: colors[1], avatar: "Th" },
+    { id: "103", name: "Nhật", color: colors[2], avatar: "N" },
+  ];
+
+  const now = new Date();
+  const dateOffset = (days) => {
+    const d = new Date(now);
+    d.setDate(d.getDate() + days);
+    return d.toISOString().slice(0, 10);
+  };
+
+  state.members = members;
+  state.currentUser = "101";
+  state.okrs = [
+    {
+      id: "okr-1",
+      title: "Ship demo Productivity Enhancement",
+      ownerId: "101",
+      krs: [
+        {
+          id: "kr-1",
+          title: "Hoàn thiện AI Assistant (local-first)",
+          done: true,
+        },
+        { id: "kr-2", title: "Đảm bảo workflow Review trước Done", done: true },
+        {
+          id: "kr-3",
+          title: "Chuẩn bị demo script + QC checklist",
+          done: false,
+        },
+      ],
+      createdAt: new Date(now.getTime() - 4 * 86400000).toISOString(),
+    },
+  ];
+
+  state.tasks = [
+    {
+      id: "demo-1",
+      title: "Chuẩn hoá backlog theo Epic/FR",
+      description: "Mapping BR/FR từ REQUIREMENTS.md, tạo task theo từng epic.",
+      assigneeId: "101",
+      deadline: dateOffset(0),
+      status: "progress",
+      order: 1,
+      createdAt: new Date(now.getTime() - 2 * 86400000).toISOString(),
+      reviewedBy: [],
+    },
+    {
+      id: "demo-2",
+      title: "Thiết kế AI output có cấu trúc (Context/Summary/Groups)",
+      description:
+        "Hỗ trợ hỏi không chuẩn, tìm task theo người, nhóm theo deadline/status.",
+      assigneeId: "103",
+      deadline: dateOffset(1),
+      status: "todo",
+      order: 2,
+      createdAt: new Date(now.getTime() - 3 * 86400000).toISOString(),
+      reviewedBy: [],
+    },
+    {
+      id: "demo-3",
+      title: "Fix BR-03: chặn Done nếu chưa approve",
+      description: "Task ở Review phải được người khác approve trước khi Done.",
+      assigneeId: "102",
+      deadline: dateOffset(-1),
+      status: "review",
+      order: 1,
+      createdAt: new Date(now.getTime() - 5 * 86400000).toISOString(),
+      reviewedBy: [],
+    },
+    {
+      id: "demo-4",
+      title: "QC: kiểm thử import/export và edge cases",
+      description:
+        "Import JSON sai format, thiếu field; export đầy đủ; không crash UI.",
+      assigneeId: "101",
+      deadline: dateOffset(2),
+      status: "review",
+      order: 2,
+      createdAt: new Date(now.getTime() - 6 * 86400000).toISOString(),
+      reviewedBy: ["102"],
+    },
+    {
+      id: "demo-5",
+      title: "Dark/Light mode polish",
+      description: "Đảm bảo UI đồng nhất và không lỗi khi toggle liên tục.",
+      assigneeId: "103",
+      deadline: "",
+      status: "done",
+      order: 1,
+      createdAt: new Date(now.getTime() - 8 * 86400000).toISOString(),
+      reviewedBy: ["101"],
+    },
+    {
+      id: "demo-6",
+      title: "Viết demo script + ROI points",
+      description: "Nêu rõ time saved, error reduction, process efficiency.",
+      assigneeId: "102",
+      deadline: dateOffset(3),
+      status: "todo",
+      order: 3,
+      createdAt: new Date(now.getTime() - 1 * 86400000).toISOString(),
+      reviewedBy: [],
+    },
+  ];
+
+  saveState();
 }
 
 // Dark Mode
@@ -1257,7 +1381,7 @@ function initAiAssistant() {
   if (!aiHasWelcomed) {
     appendAiMessage(
       "ai",
-      `Chào Musketeer! Bạn có thể dùng:\n- Tab One Thing: “hôm nay làm gì?”, “task của tôi?”\n- Tab Workspace: “tổng quan”, “status”, “OKR”\n- AI Writer: Optimize title / Fix Grammar / Summarize / Professional`,
+      `Chào bạn! Mình là AI Assistant của 3Musk.\n\nMình có thể hỗ trợ bạn phân tích REQUIREMENTS.md như:\n- Tóm tắt requirements\n- Liệt kê BR (Business Rules)\n- Liệt kê FR (Functional Requirements)\n- Giải thích Epic 6\n- Team assignment\n\nNgoài ra mình có thể trả task theo từng người (vd: “Tuấn đang có task gì”), nhóm theo deadline/status, và đưa ra One Thing cho hôm nay.\n\nBạn muốn mình hỗ trợ phần nào trước?`,
     );
     aiHasWelcomed = true;
   }
@@ -1454,6 +1578,7 @@ function computeStatusCounts() {
 
 function processWorkspaceQuery(query) {
   const lower = query.toLowerCase();
+  const q = normalizeForNlp(query ?? "");
   const counts = computeStatusCounts();
 
   if (lower.includes("okr")) {
@@ -1484,7 +1609,57 @@ function processWorkspaceQuery(query) {
       .join("\n")}`;
   }
 
-  return "Bạn có thể hỏi: “tổng quan/status”, “OKR”, hoặc “task của tôi?”.";
+  const member = findMemberByQuery(q);
+  const hasTaskWord = q.includes("task") || q.includes("cong viec");
+  if (member && hasTaskWord) {
+    const includeDone = q.includes("tat ca") || q.includes("all");
+    const base = state.tasks.filter((t) => t.assigneeId == member.id);
+    const tasks = includeDone ? base : base.filter((t) => t.status !== "done");
+    const keywords = extractKeywordFilter(q);
+    const filtered = filterTasksByKeywords(tasks, keywords);
+    if (filtered.length === 0) {
+      return `Hiện không có task phù hợp cho ${member.name}.\nGợi ý: thử “tất cả task của ${member.name}” hoặc thêm từ khoá.`;
+    }
+    return buildStructuredTasksOutput({
+      header: `Tasks for ${member.name}`,
+      member,
+      tasks: filtered,
+      groupMode:
+        q.includes("deadline") || q.includes("han") ? "deadline" : "status",
+    });
+  }
+
+  if (q.includes("qua han") || q.includes("overdue")) {
+    const overdueTasks = state.tasks.filter(
+      (t) =>
+        t.deadline && new Date(t.deadline) < new Date() && t.status !== "done",
+    );
+    if (overdueTasks.length === 0) return "Hiện không có task quá hạn.";
+    return buildStructuredTasksOutput({
+      header: "Overdue Tasks",
+      member: null,
+      tasks: overdueTasks,
+      groupMode: "status",
+    });
+  }
+
+  if (
+    q.includes("requirements") ||
+    q.includes("br") ||
+    q.includes("fr") ||
+    q.includes("epic") ||
+    q.includes("team") ||
+    q.includes("phan cong") ||
+    q.includes("assignment")
+  ) {
+    return answerRequirementsQuery(query);
+  }
+
+  if (q.includes("khong thay") || q.includes("khong hieu")) {
+    return "Mình có thể hỗ trợ: “tổng quan/status”, “OKR”, “task của tôi”, hoặc “<tên> đang có task gì”. Bạn muốn xem phần nào?";
+  }
+
+  return "Bạn có thể hỏi: “tổng quan/status”, “OKR”, “task của tôi?”, hoặc “Tuấn đang có task gì”.";
 }
 
 function getCurrentUserTasks() {
@@ -1709,6 +1884,18 @@ function processOneThingQuery(query) {
   const raw = query ?? "";
   const q = normalizeForNlp(raw);
 
+  if (
+    q.includes("requirements") ||
+    q.includes("br") ||
+    q.includes("fr") ||
+    q.includes("epic") ||
+    q.includes("team") ||
+    q.includes("phan cong") ||
+    q.includes("assignment")
+  ) {
+    return answerRequirementsQuery(raw);
+  }
+
   if (q.includes("hom nay") || q.includes("today") || q.includes("one thing")) {
     const oneThing = getOneThingPriority();
     if (!oneThing) {
@@ -1909,7 +2096,10 @@ function setAiProfileForCurrentUser(next) {
   const current = state.members.find((m) => m.id == state.currentUser);
   if (!current) return;
   const profiles = getAiProfiles();
-  profiles[String(current.id)] = { ...(profiles[String(current.id)] || {}), ...next };
+  profiles[String(current.id)] = {
+    ...(profiles[String(current.id)] || {}),
+    ...next,
+  };
   saveAiProfiles(profiles);
 }
 
@@ -2025,7 +2215,8 @@ function inferAiPlan({ input, inputNlp, profile }) {
   const q = inputNlp;
   const member = findMemberByQuery(q);
   const hasTaskWord = q.includes("task") || q.includes("cong viec");
-  const groupByDeadline = q.includes("deadline") || q.includes("han") || q.includes("ngay");
+  const groupByDeadline =
+    q.includes("deadline") || q.includes("han") || q.includes("ngay");
   const includeDone = q.includes("tat ca") || q.includes("all");
 
   if (
@@ -2051,7 +2242,11 @@ function inferAiPlan({ input, inputNlp, profile }) {
     push("seed_demo", 95);
   }
 
-  if (q.includes("reset demo") || q.includes("xoa du lieu") || q.includes("clear data")) {
+  if (
+    q.includes("reset demo") ||
+    q.includes("xoa du lieu") ||
+    q.includes("clear data")
+  ) {
     push("reset_demo", 95);
   }
 
@@ -2077,7 +2272,12 @@ function inferAiPlan({ input, inputNlp, profile }) {
     push("business_objective", 70);
   }
 
-  if (q.includes("business rule") || q.includes("quy tac") || q.includes("br-") || q === "br") {
+  if (
+    q.includes("business rule") ||
+    q.includes("quy tac") ||
+    q.includes("br-") ||
+    q === "br"
+  ) {
     push("business_rules", 70);
   }
 
@@ -2090,11 +2290,19 @@ function inferAiPlan({ input, inputNlp, profile }) {
     push("epic", 70, { epicId: match ? match[1] : null });
   }
 
-  if (q.includes("team") || q.includes("phan cong") || q.includes("assignment")) {
+  if (
+    q.includes("team") ||
+    q.includes("phan cong") ||
+    q.includes("assignment")
+  ) {
     push("team_assignment", 65);
   }
 
-  if (q.includes("workspace") || q.includes("tinh hinh") || q.includes("tong quan")) {
+  if (
+    q.includes("workspace") ||
+    q.includes("tinh hinh") ||
+    q.includes("tong quan")
+  ) {
     push("workspace_overview", 60);
   }
 
@@ -2103,14 +2311,25 @@ function inferAiPlan({ input, inputNlp, profile }) {
   }
 
   if (q.includes("qua han") || q.includes("overdue")) {
-    push("overdue_tasks", 75, { groupMode: groupByDeadline ? "deadline" : "status" });
+    push("overdue_tasks", 75, {
+      groupMode: groupByDeadline ? "deadline" : "status",
+    });
   }
 
   if (q.includes("task cua toi") || q.includes("my tasks")) {
-    push("my_tasks", 80, { groupMode: groupByDeadline ? "deadline" : "status", includeDone });
+    push("my_tasks", 80, {
+      groupMode: groupByDeadline ? "deadline" : "status",
+      includeDone,
+    });
   }
 
-  if (member && (hasTaskWord || q.includes("dang co") || q.includes("hien tai") || q.includes("co task"))) {
+  if (
+    member &&
+    (hasTaskWord ||
+      q.includes("dang co") ||
+      q.includes("hien tai") ||
+      q.includes("co task"))
+  ) {
     push("tasks_by_person", 85, {
       memberId: member.id,
       memberName: member.name,
@@ -2120,7 +2339,12 @@ function inferAiPlan({ input, inputNlp, profile }) {
     });
   }
 
-  if (q.includes("khong thay gi") || q.includes("khong thay") || q.includes("khong hieu") || q.includes("khong co gi")) {
+  if (
+    q.includes("khong thay gi") ||
+    q.includes("khong thay") ||
+    q.includes("khong hieu") ||
+    q.includes("khong co gi")
+  ) {
     push("clarify", 55);
   }
 
@@ -2148,16 +2372,34 @@ function buildAiProcessing({ input, inputNlp, best, candidates, profile }) {
     .map((c) => `${c.type}:${c.score}`)
     .join(", ");
   steps.push(`- Candidates: ${top}`);
-  steps.push(`- Profile: tone=${profile.tone}, verbosity=${profile.verbosity}, trace=${profile.showTrace ? "on" : "off"}`);
+  steps.push(
+    `- Profile: tone=${profile.tone}, verbosity=${profile.verbosity}, trace=${profile.showTrace ? "on" : "off"}`,
+  );
   steps.push(`- REQUIREMENTS.md: ${aiState.ready ? "ready" : "not-ready"}`);
-  if (best.type === "tasks_by_person" || best.type === "my_tasks" || best.type === "overdue_tasks" || best.type === "workspace_overview") {
+  if (
+    best.type === "tasks_by_person" ||
+    best.type === "my_tasks" ||
+    best.type === "overdue_tasks" ||
+    best.type === "workspace_overview"
+  ) {
     steps.push("- Read state: members/tasks");
     steps.push("- Sort/group/filter tasks");
   }
-  if (best.type === "create_task" || best.type === "seed_demo" || best.type === "reset_demo") {
+  if (
+    best.type === "create_task" ||
+    best.type === "seed_demo" ||
+    best.type === "reset_demo"
+  ) {
     steps.push("- Execute action + persist");
   }
-  if (best.type === "requirements_summary" || best.type === "business_objective" || best.type === "business_rules" || best.type === "functional_requirements" || best.type === "epic" || best.type === "team_assignment") {
+  if (
+    best.type === "requirements_summary" ||
+    best.type === "business_objective" ||
+    best.type === "business_rules" ||
+    best.type === "functional_requirements" ||
+    best.type === "epic" ||
+    best.type === "team_assignment"
+  ) {
     steps.push("- Retrieve knowledge from parsed markdown");
   }
   return steps.join("\n");
@@ -2165,10 +2407,18 @@ function buildAiProcessing({ input, inputNlp, best, candidates, profile }) {
 
 function parseProfileCommand(inputNlp) {
   const next = {};
-  if (inputNlp.includes("professional") || inputNlp.includes("chuyen nghiep") || inputNlp.includes("nghiem tuc")) {
+  if (
+    inputNlp.includes("professional") ||
+    inputNlp.includes("chuyen nghiep") ||
+    inputNlp.includes("nghiem tuc")
+  ) {
     next.tone = "professional";
   }
-  if (inputNlp.includes("friendly") || inputNlp.includes("than thien") || inputNlp.includes("thoai mai")) {
+  if (
+    inputNlp.includes("friendly") ||
+    inputNlp.includes("than thien") ||
+    inputNlp.includes("thoai mai")
+  ) {
     next.tone = "friendly";
   }
   if (inputNlp.includes("ngan gon") || inputNlp.includes("short")) {
@@ -2205,7 +2455,9 @@ function formatTasksWithProfile({ header, member, tasks, groupMode, profile }) {
     const lines = [];
     if (header) lines.push(header);
     lines.push(`Context: ${member ? member.name : "Team/Workspace"}`);
-    lines.push(`Summary: total=${summary.total}, active=${summary.active}, overdue=${summary.overdue}`);
+    lines.push(
+      `Summary: total=${summary.total}, active=${summary.active}, overdue=${summary.overdue}`,
+    );
     lines.push("");
     top.forEach((x, idx) => lines.push(`- ${idx + 1}. ${formatTaskLine(x)}`));
     return lines.join("\n");
@@ -2221,8 +2473,12 @@ function formatTasksWithProfile({ header, member, tasks, groupMode, profile }) {
   const lines = [];
   if (header) lines.push(header);
   lines.push(`Context: ${member ? member.name : "Team/Workspace"}`);
-  lines.push(`Summary: total=${summary.total}, active=${summary.active}, overdue=${summary.overdue}`);
-  lines.push(`By status: todo=${summary.counts.todo}, progress=${summary.counts.progress}, review=${summary.counts.review}, done=${summary.counts.done}`);
+  lines.push(
+    `Summary: total=${summary.total}, active=${summary.active}, overdue=${summary.overdue}`,
+  );
+  lines.push(
+    `By status: todo=${summary.counts.todo}, progress=${summary.counts.progress}, review=${summary.counts.review}, done=${summary.counts.done}`,
+  );
   if (oneThing) lines.push(`One Thing: ${formatTaskLine(oneThing)}`);
   lines.push("");
 
@@ -2234,16 +2490,22 @@ function formatTasksWithProfile({ header, member, tasks, groupMode, profile }) {
           ? "No deadline"
           : `Due ${formatDate(key)}`
         : getStatusText(key);
-    const sorted = list.slice().sort((a, b) => scoreTaskForPriority(a) - scoreTaskForPriority(b));
+    const sorted = list
+      .slice()
+      .sort((a, b) => scoreTaskForPriority(a) - scoreTaskForPriority(b));
     lines.push(`${title} (${sorted.length})`);
     sorted.forEach((task, idx) => {
-      const detail = task.description ? ` — ${clampText(task.description, detailMaxLen)}` : "";
+      const detail = task.description
+        ? ` — ${clampText(task.description, detailMaxLen)}`
+        : "";
       lines.push(`- ${idx + 1}. ${formatTaskLine(task)}${detail}`);
     });
     lines.push("");
   });
 
-  lines.push(`${t.suggest}: bạn có thể hỏi "nhóm theo deadline" hoặc thêm từ khoá (vd: "UI", "deploy").`);
+  lines.push(
+    `${t.suggest}: bạn có thể hỏi "nhóm theo deadline" hoặc thêm từ khoá (vd: "UI", "deploy").`,
+  );
   return lines.join("\n").trim();
 }
 
@@ -2262,13 +2524,27 @@ function executeAiPlan(plan) {
     return `${t.ok}\nProfile hiện tại: tone=${current.tone}, verbosity=${current.verbosity}, trace=${current.showTrace ? "on" : "off"}`;
   }
 
-  if (intent.type === "seed_demo" || intent.type === "reset_demo" || intent.type === "self_test_requirements" || intent.type === "create_task" || intent.type === "requirements_summary" || intent.type === "business_objective" || intent.type === "business_rules" || intent.type === "functional_requirements" || intent.type === "epic" || intent.type === "team_assignment" || intent.type === "workspace_overview" || intent.type === "one_thing_today") {
+  if (
+    intent.type === "seed_demo" ||
+    intent.type === "reset_demo" ||
+    intent.type === "self_test_requirements" ||
+    intent.type === "create_task" ||
+    intent.type === "requirements_summary" ||
+    intent.type === "business_objective" ||
+    intent.type === "business_rules" ||
+    intent.type === "functional_requirements" ||
+    intent.type === "epic" ||
+    intent.type === "team_assignment" ||
+    intent.type === "workspace_overview" ||
+    intent.type === "one_thing_today"
+  ) {
     return executeAiIntent(intent);
   }
 
   if (intent.type === "overdue_tasks") {
     const overdueTasks = state.tasks.filter(
-      (x) => x.deadline && new Date(x.deadline) < new Date() && x.status !== "done",
+      (x) =>
+        x.deadline && new Date(x.deadline) < new Date() && x.status !== "done",
     );
     return formatTasksWithProfile({
       header: "Overdue Tasks",
@@ -2282,7 +2558,9 @@ function executeAiPlan(plan) {
   if (intent.type === "my_tasks") {
     const member = state.members.find((m) => m.id == state.currentUser) ?? null;
     const base = state.tasks.filter((x) => x.assigneeId == state.currentUser);
-    const tasks = intent.includeDone ? base : base.filter((x) => x.status !== "done");
+    const tasks = intent.includeDone
+      ? base
+      : base.filter((x) => x.status !== "done");
     return formatTasksWithProfile({
       header: "Your Tasks",
       member,
@@ -2296,7 +2574,9 @@ function executeAiPlan(plan) {
     const member = state.members.find((m) => m.id == intent.memberId) ?? null;
     if (!member) return `${t.assistant} không tìm thấy thành viên phù hợp.`;
     const base = state.tasks.filter((x) => x.assigneeId == member.id);
-    const tasks = intent.includeDone ? base : base.filter((x) => x.status !== "done");
+    const tasks = intent.includeDone
+      ? base
+      : base.filter((x) => x.status !== "done");
     const filtered = filterTasksByKeywords(tasks, intent.keywords || []);
     return formatTasksWithProfile({
       header: `Tasks for ${member.name}`,
@@ -2316,6 +2596,8 @@ function executeAiPlan(plan) {
   return `${t.suggest}: thử một trong các câu sau:\n- "tóm tắt requirements"\n- "liệt kê BR"\n- "liệt kê FR"\n- "epic 6"\n- "team assignment"\n- "task của tôi"\n- "Tuấn đang có task gì"\n- "task quá hạn"\n- "team ra sao"\n\nMembers: ${membersHint}\n\n${t.ask}`;
 }
 
+function inferAiIntent(input) {
+  const q = normalizeForNlp(input ?? "");
 
   if (
     q.includes("seed demo") ||
